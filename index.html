@@ -1,1 +1,658 @@
-Proximamente...
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pumas Gaming Dev Lab | Gestión de Desarrollo Competitivo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css?v=11">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+</head>
+<body>
+
+<!-- ================= PRIMER USO: CREAR ADMINISTRADOR ================= -->
+<section id="pantalla-setup" class="pantalla-acceso" hidden>
+    <form class="caja-acceso" onsubmit="onSetup(event)">
+        <div class="logo"><i class="fa-solid fa-terminal" style="color: var(--primary);"></i> PUMAS DEV LAB</div>
+        <h2>Configuración inicial</h2>
+        <p>No hay usuarios todavía. Crea la cuenta de <strong>Administrador</strong> principal.</p>
+        <div class="form-group"><label for="setup-nombre">NOMBRE</label><input id="setup-nombre" name="nombre" required maxlength="60"></div>
+        <div class="form-group"><label for="setup-usuario">USUARIO</label><input id="setup-usuario" name="usuario" required minlength="3" maxlength="30" pattern="[A-Za-z0-9._-]+" autocomplete="username" autocapitalize="none" placeholder="ej. niko"></div>
+        <div class="form-group"><label for="setup-pass">CONTRASEÑA</label><input id="setup-pass" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+        <div class="form-group"><label for="setup-pass2">REPETIR CONTRASEÑA</label><input id="setup-pass2" name="password2" type="password" required minlength="8" autocomplete="new-password"></div>
+        <button type="submit" class="btn-generar">CREAR ADMINISTRADOR</button>
+    </form>
+</section>
+
+<!-- ================= INICIO DE SESIÓN ================= -->
+<section id="pantalla-login" class="pantalla-acceso" hidden>
+    <form class="caja-acceso" onsubmit="onLogin(event)">
+        <div class="logo"><i class="fa-solid fa-terminal" style="color: var(--primary);"></i> PUMAS DEV LAB</div>
+        <h2>Iniciar sesión</h2>
+        <p>Centro de desarrollo y analítica competitiva.</p>
+        <p id="login-aviso" class="aviso" hidden></p>
+        <div class="form-group"><label for="login-usuario">USUARIO</label><input id="login-usuario" name="usuario" required autocomplete="username" autocapitalize="none"></div>
+        <div class="form-group"><label for="login-pass">CONTRASEÑA</label><input id="login-pass" name="password" type="password" required autocomplete="current-password"></div>
+        <button type="submit" class="btn-generar">ENTRAR</button>
+    </form>
+</section>
+
+<!-- ================= APLICACIÓN ================= -->
+<div id="app-shell" class="app-layout" hidden>
+
+<!-- ---------- Menú lateral ---------- -->
+<aside class="sidebar" id="sidebar">
+    <div class="sb-cabecera">
+        <div class="sb-marca">
+            <i class="fa-solid fa-terminal"></i>
+            <div class="sb-texto"><strong>PUMAS DEV LAB</strong><small>/ Centro de alto rendimiento</small></div>
+        </div>
+        <button class="sb-colapsar" onclick="colapsarMenu()" aria-label="Contraer menú" title="Contraer menú">
+            <i class="fa-solid fa-angles-left"></i>
+        </button>
+    </div>
+
+    <div class="sb-nav" role="navigation" aria-label="Menú principal">
+        <button type="button" data-vista="inicio" onclick="irA('inicio')" title="Inicio">
+            <i class="fa-solid fa-house"></i><span>Inicio</span>
+        </button>
+
+        <button type="button" data-vista="vista-informe" onclick="irA('vista-informe')" title="Visión del equipo">
+            <i class="fa-solid fa-chart-column"></i><span>Visión del equipo</span>
+        </button>
+        <div class="sb-sub" data-grupo="vista-informe">
+            <button type="button" onclick="irAInforme('inf-equipo')">Dashboard</button>
+            <button type="button" onclick="irAInforme('inf-plantilla')">Jugadores</button>
+            <button type="button" onclick="irAInforme('inf-combate')">Combate</button>
+            <button type="button" onclick="irAInforme('inf-diagnostico')">Diagnóstico</button>
+        </div>
+
+        <button type="button" data-vista="vista-caidas" onclick="irA('vista-caidas')" title="Caídas">
+            <i class="fa-solid fa-parachute-box"></i><span>Caídas</span>
+        </button>
+        <button type="button" data-vista="vista-partida" onclick="irA('vista-partida')" title="Partidas">
+            <i class="fa-solid fa-gamepad"></i><span>Partidas</span>
+        </button>
+        <button type="button" data-vista="vista-equipos" onclick="irA('vista-equipos')" title="Equipos y jugadores">
+            <i class="fa-solid fa-people-group"></i><span>Equipos y jugadores</span>
+        </button>
+        <button type="button" data-vista="vista-usuarios" data-permiso="usuario.ver" onclick="irA('vista-usuarios')" title="Usuarios">
+            <i class="fa-solid fa-user-shield"></i><span>Usuarios</span>
+        </button>
+        <button type="button" data-vista="vista-org" data-permiso="org.ver" onclick="irA('vista-org')" title="Organizaciones">
+            <i class="fa-solid fa-sitemap"></i><span>Organizaciones</span>
+        </button>
+        <button type="button" data-vista="vista-ajustes" data-permiso="ajustes.editar" onclick="irA('vista-ajustes')" title="Ajustes">
+            <i class="fa-solid fa-gear"></i><span>Ajustes</span>
+        </button>
+
+        <div class="sb-titulo" data-modulo="estrategia"><span>Estrategia</span></div>
+        <button type="button" data-modulo="estrategia" data-vista="vista-tablero" data-modo="mapa" onclick="abrirEstrategia('mapa')" title="Mapas">
+            <i class="fa-solid fa-map-location-dot"></i><span>Mapas</span>
+        </button>
+        <button type="button" data-modulo="estrategia" data-vista="vista-tablero" data-modo="aerea" onclick="abrirEstrategia('aerea')" title="Vistas aéreas">
+            <i class="fa-solid fa-satellite"></i><span>Vistas aéreas</span>
+        </button>
+        <button type="button" data-modulo="estrategia" data-vista="vista-repisa" onclick="irA('vista-repisa')" title="Repisa">
+            <i class="fa-solid fa-box-archive"></i><span>Repisa</span>
+        </button>
+
+        <div class="sb-titulo"><span>Herramientas</span></div>
+        <button type="button" data-vista="modulo-resultados" onclick="mostrarSeccion('modulo-resultados', 'sec-resultados')" title="Resultados (logs)">
+            <i class="fa-solid fa-table-cells"></i><span>Resultados (logs)</span>
+        </button>
+        <button type="button" data-vista="modulo-admin" onclick="mostrarSeccion('modulo-admin', 'sec-equipo')" title="Administrativo">
+            <i class="fa-solid fa-folder-open"></i><span>Administrativo</span>
+        </button>
+        <button type="button" data-vista="modulo-rendimiento" onclick="mostrarSeccion('modulo-rendimiento', 'sec-dashboard')" title="Rendimiento">
+            <i class="fa-solid fa-chart-line"></i><span>Rendimiento</span>
+        </button>
+        <button type="button" data-vista="modulo-analisis" onclick="mostrarSeccion('modulo-analisis', 'sec-zonas')" title="Análisis táctico">
+            <i class="fa-solid fa-crosshairs"></i><span>Análisis táctico</span>
+        </button>
+        <button type="button" onclick="exportarDatos()" title="Exportar respaldo">
+            <i class="fa-solid fa-download"></i><span>Exportar respaldo</span>
+        </button>
+    </div>
+
+    <div class="sb-pie">
+        <a id="btn-soporte" class="sb-boton" target="_blank" rel="noopener noreferrer" title="Hablar con soporte" hidden>
+            <i class="fa-solid fa-headset"></i><span>Hablar con soporte</span>
+        </a>
+        <a id="btn-whatsapp" class="sb-boton sb-whatsapp" target="_blank" rel="noopener noreferrer" title="Canal de WhatsApp" hidden>
+            <i class="fa-brands fa-whatsapp"></i><span>Canal de WhatsApp</span>
+        </a>
+        <div class="sb-usuario" id="user-chip"></div>
+        <button class="sb-boton" onclick="cerrarSesion()" title="Cerrar sesión">
+            <i class="fa-solid fa-right-from-bracket"></i><span>Cerrar sesión</span>
+        </button>
+        <small class="sb-version">PUMAS DEV LAB · Beta</small>
+    </div>
+</aside>
+<div class="sb-fondo" onclick="toggleMenu()"></div>
+
+<div class="app-main">
+
+<header class="topbar">
+    <button class="menu-toggle" aria-label="Abrir menú" onclick="toggleMenu()">
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+    </button>
+    <div class="tb-estado"><span class="punto" id="punto-estado"></span><span id="statusSupabase">Verificando...</span></div>
+    <div class="tb-derecha" id="tb-usuario"></div>
+</header>
+
+<!-- ================= PANEL DE INICIO ================= -->
+<section id="inicio" class="view-section active-view">
+    <div class="contenedor">
+        <div id="panel-bienvenida"></div>
+        <div class="grid-kpis" id="panel-kpis"></div>
+
+        <div class="dos-col">
+            <div class="card-box" style="text-align: left;">
+                <h3 class="card-titulo"><i class="fa-solid fa-list-check"></i> Siguientes pasos</h3>
+                <div class="sub-btn-group" id="panel-pasos"></div>
+            </div>
+            <div class="card-box" style="text-align: left;">
+                <h3 class="card-titulo"><i class="fa-solid fa-server"></i> Sistema</h3>
+                <p>Logs procesados: <span id="statLogsCount">0 archivos</span></p>
+                <p>Datos: <strong style="color: var(--primary);">Supabase (compartidos con todo el staff)</strong></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ================= CAÍDAS ================= -->
+<section id="vista-caidas" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Caídas por roster</h2>
+        <p class="tool-desc">Zona principal y alterna de cada roster en cada mapa. El CEO y el manager ven todos los rosters de la organización; el coach edita los suyos.</p>
+        <div id="alertas-caidas"></div>
+        <div class="tool-container" id="tabla-caidas"></div>
+    </div>
+</section>
+
+<!-- ================= ESTRATEGIA: PLANO (MAPAS / VISTAS AÉREAS) ================= -->
+<section id="vista-tablero" class="view-section vista-tablero" data-modo="mapa">
+    <div class="tb-layout">
+        <aside class="tb-panel">
+            <div class="tb-bloque tb-cabeza">
+                <span class="tb-kicker">// Estrategia</span>
+                <h2 id="tb-titulo">Mapas</h2>
+                <input id="tb-nombre" placeholder="Nombre del plano (ej. Bermuda · Liga J1)" maxlength="60" aria-label="Nombre del plano" oninput="marcarCambio()">
+                <small id="tb-estado" class="ayuda">Sin guardar</small>
+            </div>
+
+            <div class="tb-bloque solo-mapa">
+                <h3>Mapa</h3>
+                <select id="tb-mapa" aria-label="Mapa" onchange="cambiarMapaTablero(this.value)"></select>
+                <label class="btn-sec tb-archivo" id="tb-img-mapa-caja">
+                    <i class="fa-solid fa-upload"></i> Imagen del mapa
+                    <input type="file" accept="image/*" hidden onchange="subirImagenMapa(this)">
+                </label>
+                <p class="ayuda">La imagen se comparte con toda la organización.</p>
+            </div>
+
+            <div class="tb-bloque solo-aerea">
+                <h3>Imagen aérea</h3>
+                <label class="btn-sec tb-archivo">
+                    <i class="fa-solid fa-upload"></i> Subir imagen
+                    <input type="file" accept="image/*" hidden onchange="subirImagenAerea(this)">
+                </label>
+                <p class="ayuda">Captura de la vista aérea, un plano o cualquier imagen para marcar.</p>
+            </div>
+
+            <div class="tb-bloque">
+                <h3>Herramientas</h3>
+                <div id="tb-herr" class="tb-herramientas"></div>
+            </div>
+
+            <div class="tb-bloque">
+                <h3>Estilo</h3>
+                <div class="tb-estilo">
+                    <input type="color" id="tb-color" value="#00f0ff" aria-label="Color" oninput="tablero.estilo.color = this.value">
+                    <div id="tb-paleta" class="tb-paleta"></div>
+                </div>
+                <label class="tb-rango">Grosor / tamaño
+                    <input type="range" min="1" max="12" value="4" oninput="tablero.estilo.grosor = Number(this.value)">
+                </label>
+                <label class="check"><input type="checkbox" onchange="tablero.estilo.relleno = this.checked"> Rellenar formas</label>
+                <div id="tb-opc-icono" hidden>
+                    <h3 style="margin-top:10px">Íconos</h3>
+                    <div id="tb-iconos" class="tb-iconos"></div>
+                </div>
+                <div id="tb-opc-logo" hidden>
+                    <h3 style="margin-top:10px">Logos</h3>
+                    <div id="tb-logos" class="tb-iconos"></div>
+                    <label class="btn-sec tb-archivo" style="margin-top:6px">
+                        <i class="fa-solid fa-upload"></i> Subir logo
+                        <input type="file" accept="image/*" hidden onchange="subirLogoTablero(this)">
+                    </label>
+                </div>
+            </div>
+
+            <div class="tb-bloque solo-mapa">
+                <h3>Equipos <em id="tb-n-equipos">0</em></h3>
+                <button type="button" class="btn-sec tb-ancho" onclick="agregarMisRosters()"><i class="fa-solid fa-people-group"></i> Agregar mis rosters</button>
+                <form class="tb-rival" onsubmit="agregarRival(event)">
+                    <input name="nombre" placeholder="Equipo rival" maxlength="22" aria-label="Nombre del equipo rival">
+                    <input name="color" type="color" value="#e66767" aria-label="Color del rival">
+                    <button type="submit" class="btn-sec" aria-label="Agregar rival"><i class="fa-solid fa-plus"></i></button>
+                </form>
+                <div id="tb-equipos" class="tb-equipos"></div>
+            </div>
+
+            <div class="tb-bloque solo-mapa">
+                <h3>Análisis del equipo elegido</h3>
+                <select id="tb-vehiculo" aria-label="Transporte" onchange="pintarAnalisisTablero()"></select>
+                <div id="tb-analisis"></div>
+            </div>
+
+            <div class="tb-bloque">
+                <h3>Guardar</h3>
+                <select id="tb-roster" aria-label="Roster del plano"></select>
+                <button type="button" class="btn-generar" onclick="guardarTablero()"><i class="fa-solid fa-box-archive"></i> GUARDAR EN LA REPISA</button>
+                <div class="tb-fila-botones">
+                    <button type="button" class="btn-sec" onclick="descargarTablero()"><i class="fa-solid fa-download"></i> PNG</button>
+                    <button type="button" class="btn-sec" onclick="nuevoTablero()"><i class="fa-solid fa-file"></i> Nuevo</button>
+                    <button type="button" class="btn-sec btn-peligro" onclick="limpiarTablero()"><i class="fa-solid fa-eraser"></i> Limpiar</button>
+                </div>
+            </div>
+        </aside>
+
+        <div class="tb-mapa">
+            <canvas id="tb-canvas" aria-label="Plano de estrategia"></canvas>
+            <div class="tb-flot">
+                <button type="button" class="btn-sec" onclick="tablero.zoom(1.3)" title="Acercar" aria-label="Acercar"><i class="fa-solid fa-plus"></i></button>
+                <button type="button" class="btn-sec" onclick="tablero.zoom(1 / 1.3)" title="Alejar" aria-label="Alejar"><i class="fa-solid fa-minus"></i></button>
+                <button type="button" class="btn-sec" onclick="tablero.centrar()" title="Centrar" aria-label="Centrar"><i class="fa-solid fa-expand"></i></button>
+                <button type="button" class="btn-sec" onclick="tablero.deshacer()" title="Deshacer" aria-label="Deshacer"><i class="fa-solid fa-rotate-left"></i></button>
+            </div>
+            <div class="tb-pista" id="tb-pista"></div>
+        </div>
+    </div>
+</section>
+
+<!-- ================= ESTRATEGIA: REPISA ================= -->
+<section id="vista-repisa" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Repisa de estrategias</h2>
+        <p class="tool-desc">Mapas y vistas aéreas guardados por el staff. Toda la organización los ve.</p>
+        <form id="repisa-filtros" class="filtros" onchange="renderRepisa()" onsubmit="event.preventDefault()">
+            <div class="form-group"><label for="rp-tipo">TIPO</label>
+                <select id="rp-tipo" name="tipo"><option value="">Todos</option><option value="mapa">Mapas</option><option value="aerea">Vistas aéreas</option></select></div>
+            <div class="form-group"><label for="rp-mapa">MAPA</label><select id="rp-mapa" name="mapa"></select></div>
+            <div class="form-group"><label for="rp-roster">ROSTER</label><select id="rp-roster" name="roster"></select></div>
+            <button type="button" class="btn-sec" onclick="abrirEstrategia('mapa')"><i class="fa-solid fa-plus"></i> Nuevo mapa</button>
+            <button type="button" class="btn-sec" onclick="abrirEstrategia('aerea')"><i class="fa-solid fa-plus"></i> Nueva vista aérea</button>
+        </form>
+        <div id="repisa-lista" class="repisa-grid"></div>
+    </div>
+</section>
+
+<!-- ================= AJUSTES (ADMIN) ================= -->
+<section id="vista-ajustes" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Ajustes de la plataforma</h2>
+        <form id="form-ajustes" class="tool-container" onsubmit="onGuardarAjustes(event)">
+            <h3 class="card-titulo"><i class="fa-solid fa-life-ring"></i> Botones de ayuda del menú</h3>
+            <p class="ayuda" style="margin-bottom: 15px;">Si dejas un campo vacío, su botón no aparece en el menú.</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="aj-soporte">ENLACE DE SOPORTE</label>
+                    <input id="aj-soporte" name="soporteUrl" type="url" placeholder="https://wa.me/573001234567">
+                    <p class="ayuda">Chat directo de WhatsApp (wa.me), Discord o un formulario.</p>
+                </div>
+                <div class="form-group">
+                    <label for="aj-canal">CANAL DE WHATSAPP</label>
+                    <input id="aj-canal" name="whatsappCanalUrl" type="url" placeholder="https://whatsapp.com/channel/...">
+                    <p class="ayuda">Enlace de invitación del canal o grupo.</p>
+                </div>
+            </div>
+            <h3 class="card-titulo" style="margin-top: 25px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Lectura de capturas con IA</h3>
+            <p class="ayuda" style="margin-bottom: 15px;">Quién puede usarla se activa por usuario en <strong>Usuarios</strong>. Los límites se renuevan cada día (hora de Colombia).</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="aj-ia-usuario">LÍMITE DIARIO POR USUARIO (POR DEFECTO)</label>
+                    <input id="aj-ia-usuario" name="iaLimiteUsuario" type="number" min="0" max="500" required>
+                    <p class="ayuda">Se aplica a quien no tenga un límite propio.</p>
+                </div>
+                <div class="form-group">
+                    <label for="aj-ia-global">LÍMITE DIARIO DE TODA LA PLATAFORMA</label>
+                    <input id="aj-ia-global" name="iaLimiteGlobal" type="number" min="0" max="5000" required>
+                    <p class="ayuda" id="ia-uso-total"></p>
+                </div>
+            </div>
+            <button type="submit" class="btn-generar" style="margin-top: 15px;">GUARDAR AJUSTES</button>
+        </form>
+    </div>
+</section>
+
+<!-- ================= ORGANIZACIONES ================= -->
+<section id="vista-org" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Organizaciones</h2>
+        <p class="tool-desc">La organización es el equipo general (ej. Pumas Gaming). Dentro de ella viven los usuarios y todos los rosters.</p>
+
+        <form id="form-org" class="tool-container" onsubmit="onCrearOrg(event)">
+            <h3 class="card-titulo"><i class="fa-solid fa-plus"></i> Nueva organización</h3>
+            <div class="form-grid">
+                <div class="form-group"><label for="org-nombre">NOMBRE</label><input id="org-nombre" name="nombre" required maxlength="60" placeholder="Pumas Gaming"></div>
+                <div class="form-group"><label for="org-logo">LOGO</label><input id="org-logo" name="logo" type="file" accept="image/*"></div>
+            </div>
+            <button type="submit" class="btn-generar" style="margin-top: 15px;">CREAR ORGANIZACIÓN</button>
+        </form>
+
+        <div id="lista-orgs" class="lista"></div>
+    </div>
+</section>
+
+<!-- ================= USUARIOS ================= -->
+<section id="vista-usuarios" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Usuarios y roles</h2>
+
+        <form id="form-usuario" class="tool-container" onsubmit="onCrearUsuario(event)">
+            <h3 class="card-titulo"><i class="fa-solid fa-user-plus"></i> Nuevo usuario</h3>
+            <div class="form-grid">
+                <div class="form-group"><label for="usr-nombre">NOMBRE</label><input id="usr-nombre" name="nombre" required maxlength="60"></div>
+                <div class="form-group"><label for="usr-usuario">USUARIO</label><input id="usr-usuario" name="usuario" required minlength="3" maxlength="30" pattern="[A-Za-z0-9._-]+" autocomplete="off" autocapitalize="none" title="Letras, números, punto, guion o guion bajo, sin espacios"></div>
+                <div class="form-group"><label for="usr-pass">CONTRASEÑA TEMPORAL</label><input id="usr-pass" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+                <div class="form-group"><label for="usr-rol">ROL</label><select id="usr-rol" name="rol" onchange="actualizarAsignacionEquipos()"></select></div>
+                <div class="form-group"><label for="usr-org">ORGANIZACIÓN</label><select id="usr-org" name="orgId" onchange="actualizarAsignacionEquipos()"></select></div>
+                <div class="form-group"><label>ROSTERS ASIGNADOS</label><div id="asignar-equipos" class="checks"></div></div>
+            </div>
+            <button type="submit" class="btn-generar" style="margin-top: 15px;">CREAR USUARIO</button>
+        </form>
+
+        <form id="form-editar-usuario" class="tool-container editor-usuario" onsubmit="onGuardarRol(event)" hidden>
+            <h3 class="card-titulo"><i class="fa-solid fa-user-pen"></i> Editar rol de <span id="editar-usuario-nombre"></span></h3>
+            <input type="hidden" name="id">
+            <div class="form-grid">
+                <div class="form-group"><label for="ed-rol">ROL</label><select id="ed-rol" name="rol" onchange="actualizarEquiposEditor()"></select></div>
+                <div class="form-group"><label for="ed-org">ORGANIZACIÓN</label><select id="ed-org" name="orgId" onchange="actualizarEquiposEditor()"></select></div>
+                <div class="form-group form-span-2"><label>ROSTERS ASIGNADOS</label><div id="ed-equipos" class="checks"></div></div>
+            </div>
+            <div class="botones-fila">
+                <button type="submit" class="btn-generar">GUARDAR CAMBIOS</button>
+                <button type="button" class="btn-sec" onclick="cerrarEditorRol()">Cancelar</button>
+            </div>
+        </form>
+
+        <div class="card-box leyenda-roles">
+            <h3 class="card-titulo"><i class="fa-solid fa-key"></i> Qué puede hacer cada rol</h3>
+            <div class="tabla-scroll"><table class="tabla-datos">
+                <thead><tr><th>Acción</th><th>Admin</th><th>CEO</th><th>Manager</th><th>Coach</th><th>Analista</th></tr></thead>
+                <tbody>
+                    <tr><td>Crear organización</td><td>✔</td><td></td><td></td><td></td><td></td></tr>
+                    <tr><td>Crear usuarios</td><td>✔ todos</td><td>✔ manager, coach, analista</td><td></td><td>✔ analista</td><td></td></tr>
+                    <tr><td>Crear rosters</td><td>✔</td><td>✔</td><td></td><td>✔</td><td></td></tr>
+                    <tr><td>Registrar jugadores</td><td>✔</td><td>✔</td><td></td><td>✔ sus rosters</td><td></td></tr>
+                    <tr><td>Registrar partidas</td><td>✔</td><td>✔</td><td></td><td>✔ sus rosters</td><td>✔ sus rosters</td></tr>
+                    <tr><td>Ver estadísticas</td><td>Todo</td><td>Toda su organización</td><td>Toda su organización</td><td>Sus rosters</td><td>Sus rosters</td></tr>
+                    <tr><td>Cambiar roles</td><td>✔ todos</td><td>✔ manager, coach, analista</td><td></td><td></td><td></td></tr>
+                </tbody>
+            </table></div>
+        </div>
+
+        <div id="lista-usuarios" class="lista"></div>
+    </div>
+</section>
+
+<!-- ================= EQUIPOS / ROSTERS ================= -->
+<section id="vista-equipos" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Equipos y jugadores</h2>
+
+        <form id="form-equipo" class="tool-container" onsubmit="onCrearEquipo(event)">
+            <h3 class="card-titulo"><i class="fa-solid fa-people-group"></i> Nuevo roster</h3>
+            <div class="form-grid">
+                <div class="form-group"><label for="eq-nombre">NOMBRE DEL ROSTER</label><input id="eq-nombre" name="nombre" required maxlength="60" placeholder="Pumas Elite"></div>
+                <div class="form-group"><label for="eq-logo">LOGO</label><input id="eq-logo" name="logo" type="file" accept="image/*"></div>
+                <div class="form-group"><label for="eq-org">ORGANIZACIÓN</label><select id="eq-org" name="orgId"></select></div>
+            </div>
+            <button type="submit" class="btn-generar" style="margin-top: 15px;">CREAR ROSTER</button>
+        </form>
+
+        <div id="lista-equipos" class="lista"></div>
+    </div>
+</section>
+
+<!-- ================= REGISTRO DE PARTIDA ================= -->
+<section id="vista-partida" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Registrar partida</h2>
+        <p id="partida-sin-equipos" class="vacio" hidden>Primero crea un roster y registra sus jugadores.</p>
+
+        <form id="form-partida" class="tool-container" onsubmit="onGuardarPartida(event)">
+            <div class="form-grid form-grid-4">
+                <div class="form-group"><label for="pt-team">ROSTER</label><select id="pt-team" name="teamId" onchange="renderTablaStats()"></select></div>
+                <div class="form-group"><label for="pt-fecha">FECHA</label><input id="pt-fecha" name="fecha" type="date" required></div>
+                <div class="form-group"><label for="pt-hora">HORA</label><input id="pt-hora" name="hora" type="time" required></div>
+                <div class="form-group"><label for="pt-mapa">MAPA</label><select id="pt-mapa" name="mapa" onchange="actualizarCaidaPartida()"></select></div>
+                <div class="form-group"><label for="pt-caida">CAÍDA</label><select id="pt-caida" name="caida"></select></div>
+                <div class="form-group"><label for="pt-evento">TIPO DE EVENTO</label><select id="pt-evento" name="evento"></select></div>
+                <div class="form-group"><label for="pt-pos">POSICIÓN FINAL</label><input id="pt-pos" name="posicion" type="number" min="1" max="60" value="1" required></div>
+                <div class="form-group"><label for="pt-total">TOTAL DE EQUIPOS</label><input id="pt-total" name="totalEquipos" type="number" min="1" max="60" value="12" required></div>
+            </div>
+
+            <div class="captura-zona">
+                <div class="form-group">
+                    <label for="pt-captura">CAPTURA DEL MARCADOR (OPCIONAL)</label>
+                    <input id="pt-captura" name="captura" type="file" accept="image/*" onchange="onCaptura(this)">
+                </div>
+                <button type="button" id="btn-leer-ia" class="btn-sec" onclick="leerCapturaIA()" disabled>
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Leer con IA
+                </button>
+                <p id="ia-cupo" class="ayuda" hidden></p>
+                <div id="preview-captura"></div>
+            </div>
+
+            <h3 class="card-titulo" style="margin-top: 20px;"><i class="fa-solid fa-table"></i> Estadísticas del marcador</h3>
+            <div id="tabla-stats" class="tabla-scroll"></div>
+
+            <div class="form-grid form-grid-4" style="margin-top: 15px;">
+                <div class="form-group"><label for="pt-pd">PRIMERO EN DERRIBAR</label><select id="pt-pd" name="primerDerribo"></select></div>
+                <div class="form-group"><label for="pt-pc">PRIMERO EN CAER</label><select id="pt-pc" name="primeraCaida"></select></div>
+                <div class="form-group form-span-2"><label for="pt-notas">NOTAS</label><input id="pt-notas" name="notas" maxlength="300" placeholder="Rotación, zona final, errores..."></div>
+            </div>
+
+            <button type="submit" class="btn-generar" style="margin-top: 15px;">GUARDAR PARTIDA</button>
+        </form>
+
+        <h3 class="card-titulo" style="margin-top: 30px;"><i class="fa-solid fa-clock-rotate-left"></i> Partidas recientes</h3>
+        <div id="lista-partidas"></div>
+    </div>
+</section>
+
+<!-- ================= INFORME ================= -->
+<section id="vista-informe" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title no-print">Informe de rendimiento</h2>
+        <form id="filtros-informe" class="filtros no-print" onchange="generarInforme()" onsubmit="event.preventDefault()">
+            <div class="form-group"><label for="inf-alcance">ALCANCE</label><select id="inf-alcance" name="alcance"></select></div>
+            <div class="form-group"><label for="inf-desde">DESDE</label><input id="inf-desde" name="desde" type="date"></div>
+            <div class="form-group"><label for="inf-hasta">HASTA</label><input id="inf-hasta" name="hasta" type="date"></div>
+            <div class="form-group"><label for="inf-mapa">MAPA</label><select id="inf-mapa" name="mapa"></select></div>
+            <div class="form-group"><label for="inf-evento">EVENTO</label><select id="inf-evento" name="evento"></select></div>
+            <button type="button" class="btn-sec" onclick="imprimirInforme()"><i class="fa-solid fa-file-pdf"></i> Exportar PDF</button>
+        </form>
+        <div id="informe"></div>
+    </div>
+</section>
+
+<!-- ================= MÓDULO 1: ADMINISTRATIVO ================= -->
+<section id="modulo-admin" class="view-section">
+    <div style="padding: 10px 4%;">
+        <button onclick="volverInicio()" class="btn-volver"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
+        <h2 class="section-title">Módulo Administrativo</h2>
+
+        <div id="sec-equipo" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-shield-cat"></i> Equipo</h3>
+                <p>Estructura general, insignias, alineaciones oficiales y registros legales de Pumas Gaming.</p>
+            </div>
+        </div>
+        <div id="sec-miembros" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-id-card-clip"></i> Miembros</h3>
+                <p>Directorio de staff, analistas, coachs y jugadores activos en el circuito.</p>
+            </div>
+        </div>
+        <div id="sec-presupuestos" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-wallet"></i> Presupuestos</h3>
+                <p>Control financiero de inscripciones, viáticos, inversiones en hardware y premios.</p>
+            </div>
+        </div>
+        <div id="sec-torneos" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-trophy"></i> Torneos</h3>
+                <p>Inscripciones, calendarios de ligas y torneos oficiales (Free Fire LATAM / USA).</p>
+            </div>
+        </div>
+        <div id="sec-resultados-eport" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-chart-pie"></i> Resultados por e-Sport</h3>
+                <p>Consolidado histórico de desempeño por disciplina competitiva de Pumas Gaming.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ================= MÓDULO 2: RENDIMIENTO ================= -->
+<section id="modulo-rendimiento" class="view-section">
+    <div style="padding: 10px 4%;">
+        <button onclick="volverInicio()" class="btn-volver"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
+        <h2 class="section-title">Módulo de Rendimiento</h2>
+
+        <div id="sec-dashboard" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-chart-line"></i> Dashboard</h3>
+                <p>Métricas en tiempo real, estado de conexión Supabase y rendimiento general.</p>
+            </div>
+        </div>
+        <div id="sec-jugadores" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-users-gear"></i> Jugadores</h3>
+                <p>Estadísticas individuales por rol (Killua, Zamas, Pinocho, Nein, Gxrciia, Asta).</p>
+            </div>
+        </div>
+        <div id="sec-partidas" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-gamepad"></i> Partidas</h3>
+                <p>Registro detallado de mapas, rotaciones, enfrentamientos y puntajes por ronda.</p>
+            </div>
+        </div>
+        <div id="sec-gestion" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-sliders"></i> Gestión</h3>
+                <p>Organización de bloques de entrenamiento diario y scrims de práctica.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ================= MÓDULO 3: ANÁLISIS ================= -->
+<section id="modulo-analisis" class="view-section">
+    <div style="padding: 10px 4%;">
+        <button onclick="volverInicio()" class="btn-volver"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
+        <h2 class="section-title">Módulo de Análisis Táctico</h2>
+
+        <div id="sec-zonas" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-bullseye"></i> Zonas Seguras</h3>
+                <p>Análisis predictivo de cierre de círculos, posicionamiento en mapas (Bermuda, Purgatorio, Nexterra).</p>
+            </div>
+        </div>
+        <div id="sec-mapstream" class="sub-seccion-content" style="margin-bottom: 20px;">
+            <div class="card-box" style="text-align: left;">
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-satellite"></i> Mapstream</h3>
+                <p>Visualización de trayectorias, líneas de visión, zonas de combate y repetición táctica.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ================= MÓDULO 4: RESULTADOS ================= -->
+<section id="modulo-resultados" class="view-section">
+    <div style="padding: 10px 4%;">
+        <button onclick="volverInicio()" class="btn-volver"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
+        <h2 class="section-title">Módulo de Resultados</h2>
+
+        <div id="sec-resultados" class="tool-container">
+            <p class="tool-desc">
+                Sube o pega los registros <code>.log</code> o <code>.txt</code> de las partidas competitivas para estructurar las tablas con diseño técnico celestes, plateado y negro.
+            </p>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>MODO DE CÁLCULO Y ORDENAMIENTO</label>
+                    <select id="selectModoCalculo" class="dropdown-select" onchange="renderizarResultadosFromState()">
+                        <option value="1">1. Normal (Score Total Estándar)</option>
+                        <option value="2">2. Solo Posición (RankScore)</option>
+                        <option value="3">3. Solo Kills (Puntos por Kill)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>MODERADOR / ADMIN DEV</label>
+                    <input type="text" id="inputModerador" value="DevLab · Coach Niko">
+                </div>
+            </div>
+
+            <div class="form-grid" style="margin-top: 15px;">
+                <div class="form-group">
+                    <label>TÍTULO DEL TORNEO</label>
+                    <input type="text" id="inputTituloTorneo" value="PUMAS GAMING DEV LAB" oninput="renderizarResultadosFromState()">
+                </div>
+                <div class="form-group">
+                    <label>JORNADA / FASE</label>
+                    <input type="text" id="inputJornadaTorneo" value="FASE DE PRUEBAS 01" oninput="renderizarResultadosFromState()">
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label>CARGAR ARCHIVO DE LOG (.TXT / .LOG)</label>
+                <input type="file" id="fileInput" multiple accept=".txt,.log" onchange="prepararRenombradoEquipos()">
+                <div id="seccionRenombrar" style="display: none; margin-top: 20px; background: rgba(0,0,0,0.6); padding: 20px; border: 1px solid var(--primary);">
+                    <h3 style="color: var(--primary); margin-bottom: 10px; font-family: 'Orbitron'; font-size: 1.1rem;">Editar Nombres de Equipos Detectados</h3>
+                    <div id="listaEquiposInputs" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;"></div>
+                    <button onclick="procesarConNombresPersonalizados()" class="btn-generar" style="margin-top: 15px; padding: 10px 20px;">
+                        CONFIRMAR Y GENERAR TABLA TÉCNICA
+                    </button>
+                </div>
+            </div>
+
+            <div class="results-wrapper">
+                <div id="outputTablasLadoALado" class="result-box" style="margin-top: 25px; width: 100%;"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="no-print">
+    <p>&copy; 2026 PUMAS GAMING DEV LAB. Todos los derechos reservados.</p>
+</footer>
+
+</div>
+</div>
+
+<!-- Visor de capturas -->
+<div id="modal-captura" class="modal" hidden onclick="this.hidden = true">
+    <img alt="Captura del marcador">
+</div>
+
+<script src="js/config.js?v=11"></script>
+<script src="js/db.js?v=11"></script>
+<script src="js/auth.js?v=11"></script>
+<script src="js/analytics.js?v=11"></script>
+<script src="js/tablero.js?v=11"></script>
+<script src="js/estrategia.js?v=11"></script>
+<script src="script.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
+</body>
+</html>
