@@ -98,12 +98,85 @@ function entrar() {
     const u = Auth.usuario;
     $('#user-chip').innerHTML = `<strong>${esc(u.nombre)}</strong><small>@${esc(u.usuario)} · ${ROLES[u.rol].nombre}</small>`;
     $('#tb-usuario').innerHTML = `<i class="fa-solid ${ROLES[u.rol].icono}"></i> ${esc(u.nombre)} <span class="rol-tag rol-${u.rol}">${ROLES[u.rol].nombre}</span>`;
+    pintarSelectorOrg();
     // Mostrar solo lo que el rol puede usar
     $$('[data-permiso]').forEach(el => { el.hidden = !Auth.puede(el.dataset.permiso); });
-    // Módulos apagados en js/config.js
-    $$('[data-modulo]').forEach(el => { if (!MODULOS[el.dataset.modulo]) el.hidden = true; });
+    aplicarModulos();
     aplicarBotonesAyuda();
     irA('inicio');
+    cargarModulos();
+}
+
+// ---------- Módulos activables (Ajustes > Módulos) ----------
+let modulosGuardados = {};      // lo que configuró el admin (migración 008)
+
+function rolesDeModulo(id) {
+    const guardado = modulosGuardados[id];
+    return Array.isArray(guardado) ? guardado : (MODULOS[id]?.roles || []);
+}
+
+// El admin siempre ve todos los módulos (para probar); el resto, según su rol
+function moduloVisible(id) {
+    if (!MODULOS[id]) return true;
+    return Auth.esAdmin() || rolesDeModulo(id).includes(Auth.usuario.rol);
+}
+
+function moduloDeVista(vista) {
+    return Object.keys(MODULOS).find(id => MODULOS[id].vistas.includes(vista)) || null;
+}
+
+// Un elemento puede pertenecer a varios módulos (ej. el título "Estrategia")
+function aplicarModulos() {
+    if (!Auth.usuario) return;
+    $$('[data-modulo]').forEach(el => {
+        const ids = el.dataset.modulo.split(' ');
+        el.hidden = !ids.some(moduloVisible);
+        // Marca para el admin: módulo que nadie más ve
+        el.classList.toggle('solo-admin', Auth.esAdmin() && ids.every(id => rolesDeModulo(id).every(r => r === 'admin')));
+    });
+}
+
+async function cargarModulos() {
+    try {
+        const a = await DB.ajustes();
+        modulosGuardados = a.modulos || {};
+    } catch (err) { modulosGuardados = {}; }
+    aplicarModulos();
+    // Si la vista abierta quedó apagada para este rol, volver al inicio
+    const abierta = $('.view-section.active-view');
+    const m = abierta && moduloDeVista(abierta.id);
+    if (m && !moduloVisible(m)) irA('inicio');
+}
+
+// ---------- Organización activa ----------
+// Barra superior: el admin elige en qué organización trabaja; el resto ve la suya fija
+async function pintarSelectorOrg() {
+    const caja = $('#org-activa');
+    const orgs = await Auth.todasLasOrgs();
+    const activa = orgs.find(o => o.id === Auth.orgActivaId);
+    if (!Auth.esAdmin()) {
+        caja.innerHTML = activa ? `${logoHTML(activa.logo, activa.nombre, 'logo-mini')}<span>${esc(activa.nombre)}</span>` : '';
+        return;
+    }
+    caja.innerHTML = orgs.length ? `
+        ${activa ? logoHTML(activa.logo, activa.nombre, 'logo-mini') : ''}
+        <select aria-label="Organización en la que trabajas" onchange="cambiarOrgActiva(this.value)">
+            ${orgs.map(o => `<option value="${o.id}" ${o.id === Auth.orgActivaId ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}
+        </select>` : '<span class="ayuda">Sin organizaciones</span>';
+}
+
+async function cambiarOrgActiva(id) {
+    if (tbSinGuardar && !confirm('Hay cambios sin guardar en el plano abierto. ¿Descartarlos?')) return pintarSelectorOrg();
+    tbSinGuardar = false;
+    Auth.cambiarOrgActiva(id);
+    await pintarSelectorOrg();
+    const org = (await Auth.orgsVisibles())[0];
+    toast(`Trabajando en ${org ? org.nombre : 'otra organización'}.`);
+    // Vuelve a pintar la vista abierta con los datos de la nueva organización
+    const vista = $('.view-section.active-view');
+    if (!vista) return irA('inicio');
+    if (vista.id === 'vista-tablero') return abrirEstrategia($('#vista-tablero').dataset.modo || 'mapa');
+    irA(vista.id);
 }
 
 // Botones de soporte y canal de WhatsApp (los configura el admin en Ajustes)
@@ -142,6 +215,13 @@ const RENDER_VISTA = {
 };
 
 function irA(vista) {
+    const modulo = moduloDeVista(vista);
+    if (modulo && Auth.usuario && !moduloVisible(modulo)) {
+        toast('Ese módulo no está habilitado para tu rol.', 'error');
+        vista = 'inicio';
+    }
+    // Al salir de MapStream la repetición se pausa
+    if (typeof mapstream !== 'undefined' && mapstream && vista !== 'vista-mapstream') { mapstream.pausar(); msPintarBotonPlay(); }
     $$('.view-section').forEach(el => el.classList.remove('active-view'));
     const target = document.getElementById(vista);
     if (target) target.classList.add('active-view');
@@ -186,31 +266,32 @@ async function renderPanel() {
     const equipos = await Auth.equiposVisibles();
     const partidas = await DB.partidas(equipos.map(t => t.id));
     const jugadores = (await DB.jugadores()).filter(p => equipos.some(t => t.id === p.teamId));
-    const org = orgs.find(o => o.id === u.orgId);
+    const org = orgs[0];
+    const usuarios = await Auth.usuariosVisibles().catch(() => []);
 
     $('#panel-bienvenida').innerHTML = `
         <div class="bienvenida">
             ${org ? logoHTML(org.logo, org.nombre, 'logo-grande') : ''}
             <div>
                 <h1>Hola, <span style="color: var(--primary);">${esc(u.nombre)}</span></h1>
-                <p>${ROLES[u.rol].nombre}${org ? ' · ' + esc(org.nombre) : ' · Acceso global'}</p>
+                <p>${ROLES[u.rol].nombre}${org ? ' · ' + esc(org.nombre) : ' · Sin organización'}</p>
             </div>
         </div>`;
 
     $('#panel-kpis').innerHTML = [
-        ['fa-sitemap', 'Organizaciones', orgs.length],
+        ['fa-user-shield', 'Staff', usuarios.filter(x => x.orgId === Auth.orgActivaId).length],
         ['fa-people-group', 'Rosters visibles', equipos.length],
         ['fa-user-ninja', 'Jugadores', jugadores.length],
         ['fa-gamepad', 'Partidas registradas', partidas.length]
     ].map(([i, t, v]) => `<div class="card-box"><i class="fa-solid ${i}"></i><h3>${t}</h3><p class="kpi-num">${v}</p></div>`).join('');
 
     const pasos = [];
-    if (Auth.puede('org.crear') && !orgs.length) pasos.push(['vista-org', 'Crea la organización (ej. Pumas Gaming)']);
+    if (Auth.puede('org.crear') && !org) pasos.push(['vista-org', 'Crea la organización (ej. Pumas Gaming)']);
     if (Auth.puede('usuario.crear')) pasos.push(['vista-usuarios', 'Crea los usuarios del staff']);
     if (Auth.puede('equipo.crear') && !equipos.length) pasos.push(['vista-equipos', 'Crea tu primer roster y registra jugadores']);
     if (Auth.puede('partida.registrar') && equipos.length) pasos.push(['vista-partida', 'Registra una partida']);
     if (partidas.length) pasos.push(['vista-informe', 'Ver el informe de rendimiento']);
-    $('#panel-pasos').innerHTML = pasos.map(([v, t]) =>
+    $('#panel-pasos').innerHTML = pasos.filter(([v]) => !moduloDeVista(v) || moduloVisible(moduloDeVista(v))).map(([v, t]) =>
         `<button onclick="irA('${v}')"><i class="fa-solid fa-angle-right"></i> ${t}</button>`).join('');
 }
 
@@ -289,11 +370,50 @@ async function renderAjustes() {
     f.whatsappCanalUrl.value = a.whatsappCanalUrl;
     f.iaLimiteUsuario.value = a.iaLimiteUsuario;
     f.iaLimiteGlobal.value = a.iaLimiteGlobal;
+    modulosGuardados = a.modulos || {};
+    pintarModulosAjustes(a.modulos === null);
     try {
         const usos = await DB.iaUsosHoy();
         $('#ia-uso-total').textContent = `Hoy se han hecho ${Stats.sum(Object.values(usos))} lecturas en toda la plataforma.`;
     } catch (err) {
         $('#ia-uso-total').textContent = 'Ejecuta la migración 004_limites_ia.sql para activar los límites.';
+    }
+}
+
+function pintarModulosAjustes(faltaMigracion) {
+    const roles = Object.keys(ROLES);
+    $('#modulos-aviso').hidden = !faltaMigracion;
+    $('#tabla-modulos').innerHTML = `
+        <thead><tr><th>Módulo</th>${roles.map(r => `<th>${ROLES[r].nombre}</th>`).join('')}</tr></thead>
+        <tbody>${Object.entries(MODULOS).map(([id, m]) => {
+            const activos = rolesDeModulo(id);
+            return `<tr>
+                <td><strong>${esc(m.n)}</strong><br><small>${esc(m.detalle)}</small></td>
+                ${roles.map(r => r === 'admin'
+                    ? '<td><input type="checkbox" checked disabled title="El admin siempre ve todos los módulos"></td>'
+                    : `<td><input type="checkbox" data-mod="${id}" data-rol="${r}" ${activos.includes(r) ? 'checked' : ''} aria-label="${esc(m.n)} para ${ROLES[r].nombre}"></td>`).join('')}
+            </tr>`;
+        }).join('')}</tbody>`;
+}
+
+// Atajos de la tabla: prender o apagar un módulo para todos los roles
+function modulosTodos(encender) {
+    $$('#tabla-modulos input[data-mod]').forEach(i => { i.checked = encender; });
+}
+
+async function onGuardarModulos(e) {
+    e.preventDefault();
+    const modulos = {};
+    Object.keys(MODULOS).forEach(id => {
+        modulos[id] = ['admin', ...$$(`#tabla-modulos input[data-mod="${id}"]:checked`).map(i => i.dataset.rol)];
+    });
+    try {
+        await DB.guardarModulos(modulos);
+        modulosGuardados = modulos;
+        aplicarModulos();
+        toast('Módulos guardados. Cada usuario los verá al recargar o volver a entrar.');
+    } catch (err) {
+        toast(/modulos/.test(err.message) ? 'Falta ejecutar la migración 008_modulos.sql en Supabase.' : err.message, 'error');
     }
 }
 
@@ -318,17 +438,18 @@ async function onGuardarAjustes(e) {
 // Organizaciones
 // ============================================================
 async function renderOrganizaciones() {
-    const orgs = await Auth.orgsVisibles();
+    const orgs = await Auth.todasLasOrgs();
     const users = await DB.usuarios();
     const teams = await DB.equipos();
     $('#form-org').hidden = !Auth.puede('org.crear');
     $('#lista-orgs').innerHTML = orgs.length ? orgs.map(o => `
-        <div class="card-box fila-entidad">
+        <div class="card-box fila-entidad ${o.id === Auth.orgActivaId ? 'org-activa-fila' : ''}">
             ${logoHTML(o.logo, o.nombre, 'logo-medio')}
             <div class="fila-info">
-                <h3>${esc(o.nombre)}</h3>
+                <h3>${esc(o.nombre)}${o.id === Auth.orgActivaId ? ' <span class="chip-activa">Activa</span>' : ''}</h3>
                 <p>${users.filter(u => u.orgId === o.id).length} usuarios · ${teams.filter(t => t.orgId === o.id).length} rosters</p>
             </div>
+            ${Auth.esAdmin() && o.id !== Auth.orgActivaId ? `<button class="btn-sec" onclick="cambiarOrgActiva('${o.id}')"><i class="fa-solid fa-right-to-bracket"></i> Trabajar aquí</button>` : ''}
             ${Auth.puede('org.editar') ? `
             <label class="btn-sec">
                 <i class="fa-solid fa-image"></i> Cambiar logo
@@ -344,6 +465,8 @@ async function onCrearOrg(e) {
         await DB.crearOrg({ nombre: f.nombre.value, logo: await leerLogo(f.logo) });
         f.reset();
         toast('Organización creada.');
+        if (!Auth.orgActivaId) await Auth.elegirOrgInicial();
+        pintarSelectorOrg();
         renderOrganizaciones();
     } catch (err) { toast(err.message, 'error'); }
 }
@@ -352,6 +475,7 @@ async function cambiarLogoOrg(id, input) {
     try {
         await DB.actualizarOrg(id, { logo: await leerLogo(input) });
         toast('Logo actualizado.');
+        pintarSelectorOrg();
         renderOrganizaciones();
     } catch (err) { toast(err.message, 'error'); }
 }
@@ -367,8 +491,7 @@ async function renderUsuarios() {
         form.rol.innerHTML = Auth.rolesCreables().map(r => `<option value="${r}">${ROLES[r].nombre}</option>`).join('');
         const orgs = await Auth.orgsVisibles();
         form.orgId.innerHTML = orgs.map(o => `<option value="${o.id}">${esc(o.nombre)}</option>`).join('');
-        form.orgId.disabled = !Auth.esAdmin();
-        if (!Auth.esAdmin()) form.orgId.value = u.orgId;
+        form.orgId.disabled = true;   // siempre la organización activa
         await actualizarAsignacionEquipos();
     }
 
@@ -450,9 +573,9 @@ async function abrirEditorRol(id) {
     $('#editar-usuario-nombre').textContent = `${x.nombre} (@${x.usuario})`;
     f.rol.innerHTML = rolesAsignables().map(r => `<option value="${r}">${ROLES[r].nombre}</option>`).join('');
     f.rol.value = x.rol;
-    const orgs = await Auth.orgsVisibles();
+    const orgs = await Auth.todasLasOrgs();
     f.orgId.innerHTML = orgs.map(o => `<option value="${o.id}">${esc(o.nombre)}</option>`).join('');
-    f.orgId.value = x.orgId || Auth.usuario.orgId || (orgs[0] && orgs[0].id) || '';
+    f.orgId.value = x.orgId || Auth.orgActivaId || (orgs[0] && orgs[0].id) || '';
     f.orgId.disabled = !Auth.esAdmin();
     f.hidden = false;
     await actualizarEquiposEditor();
@@ -469,7 +592,9 @@ async function actualizarEquiposEditor() {
         return;
     }
     const actuales = JSON.parse(f.dataset.equipos || '[]');
-    const teams = (await Auth.equiposVisibles()).filter(t => t.orgId === f.orgId.value);
+    const teams = Auth.esAdmin()
+        ? (await DB.equipos()).filter(t => t.orgId === f.orgId.value)
+        : await Auth.equiposVisibles();
     caja.innerHTML = teams.length
         ? teams.map(t => `<label class="check"><input type="checkbox" value="${t.id}" ${actuales.includes(t.id) ? 'checked' : ''}> ${esc(t.nombre)}</label>`).join('')
         : '<p class="ayuda">Esta organización no tiene rosters todavía.</p>';
@@ -509,8 +634,7 @@ async function actualizarAsignacionEquipos() {
         caja.innerHTML = '<p class="ayuda">Este rol ve todos los rosters de su organización.</p>';
         return;
     }
-    const orgId = Auth.esAdmin() ? form.orgId.value : Auth.usuario.orgId;
-    const teams = (await Auth.equiposVisibles()).filter(t => t.orgId === orgId);
+    const teams = await Auth.equiposVisibles();
     caja.innerHTML = teams.length
         ? teams.map(t => `<label class="check"><input type="checkbox" name="equipos" value="${t.id}"> ${esc(t.nombre)}</label>`).join('')
         : '<p class="ayuda">No hay rosters todavía; puedes asignarlos después.</p>';
@@ -521,7 +645,7 @@ async function onCrearUsuario(e) {
     const f = e.target;
     const rol = f.rol.value;
     if (!Auth.rolesCreables().includes(rol)) return toast('No puedes crear ese rol.', 'error');
-    const orgId = Auth.esAdmin() ? f.orgId.value : Auth.usuario.orgId;
+    const orgId = Auth.orgActivaId;
     if (rol !== 'admin' && !orgId) return toast('Primero crea una organización.', 'error');
     const btn = f.querySelector('button[type="submit"]');
     btn.disabled = true;
@@ -627,7 +751,7 @@ async function renderEquipos() {
 async function onCrearEquipo(e) {
     e.preventDefault();
     const f = e.target;
-    const orgId = Auth.esAdmin() ? f.orgId.value : Auth.usuario.orgId;
+    const orgId = Auth.orgActivaId;
     if (!orgId) return toast('Primero crea una organización.', 'error');
     try {
         await DB.crearEquipo({ orgId, nombre: f.nombre.value, logo: await leerLogo(f.logo), creadoPor: Auth.usuario.id });
@@ -1030,8 +1154,53 @@ async function generarInforme() {
         <p class="inf-sub">Primer intercambio · dato ingresado a mano en el registro de partida</p>
         ${grafica('Primero en derribar frente a primero en caer', 'En cuántas partidas cada uno abrió o entregó el primer intercambio', primerIntercambio(plantilla))}
         ${grafica('Apoyo al equipo por partida', 'Curación, levantamientos y resurrecciones promedio', tablaApoyo(plantilla))}
+    </div>
+
+    <div class="pagina-informe" id="inf-partidas">
+        ${cabeceraInforme(titulo, logo, 'Partidas', f)}
+        <h2 class="inf-titulo">Partidas</h2>
+        <p class="inf-sub">${partidas.length} partida(s) en el período · la más reciente primero</p>
+        ${seccion('Forma reciente', formaReciente(partidas))}
+        ${seccion('Historial', tablaHistorial(partidas, jugadores, teams, tipo === 'org'))}
         <p class="pie-informe">${esc(titulo)} · generado por Pumas Dev Lab · ${new Date().toLocaleDateString('es')}</p>
     </div>`;
+}
+
+// Últimas 10 partidas como fichas: Booyah, Top 3 o posición
+function formaReciente(partidas) {
+    const ult = ordenarCronologico(partidas).slice(-10);
+    const racha = mejorRacha(ordenarCronologico(partidas), m => m.posicion <= 3);
+    return `
+        <div class="forma">${ult.map((m, i) => {
+            const clase = m.posicion === 1 ? 'f-booyah' : m.posicion <= 3 ? 'f-top3' : m.posicion <= 6 ? 'f-medio' : 'f-bajo';
+            return `<span class="forma-ficha ${clase}" style="--n:${i}" title="${esc(m.fecha)} · ${esc(m.mapa)} · #${m.posicion} · ${puntosPartida(m)} pts">${m.posicion === 1 ? '<i class="fa-solid fa-crown"></i>' : '#' + m.posicion}</span>`;
+        }).join('')}</div>
+        <p class="ayuda">De la más antigua a la más reciente · mejor racha en Top 3: <strong>${racha}</strong> partida(s) seguidas</p>`;
+}
+
+function mejorRacha(partidas, cumple) {
+    let mejor = 0, actual = 0;
+    partidas.forEach(m => { actual = cumple(m) ? actual + 1 : 0; mejor = Math.max(mejor, actual); });
+    return mejor;
+}
+
+function tablaHistorial(partidas, jugadores, teams, conRoster) {
+    const nick = id => (jugadores.find(p => p.id === id) || {}).nick || '—';
+    const filas = ordenarCronologico(partidas).reverse();
+    return `<div class="tabla-scroll"><table class="tabla-informe">
+        <thead><tr><th>Fecha</th>${conRoster ? '<th>Roster</th>' : ''}<th>Mapa</th><th>Caída</th><th>Evento</th><th>Pos.</th><th>Bajas</th><th>Pts</th><th>MVP</th></tr></thead>
+        <tbody>${filas.map(m => {
+            const mvp = [...m.stats].sort((a, b) => (b.k - a.k) || (b.dmg - a.dmg))[0];
+            return `<tr>
+                <td>${esc(m.fecha)} <small>${esc(m.hora)}</small></td>
+                ${conRoster ? `<td>${esc((teams.find(t => t.id === m.teamId) || {}).nombre || '')}</td>` : ''}
+                <td>${esc(m.mapa)}</td><td>${esc(m.caida || '—')}</td><td>${esc(nombreEvento(m.evento))}</td>
+                <td><span class="pos-chip ${m.posicion === 1 ? 'f-booyah' : m.posicion <= 3 ? 'f-top3' : ''}">#${m.posicion}</span></td>
+                <td>${bajasPartida(m)}</td><td><strong>${puntosPartida(m)}</strong></td>
+                <td>${mvp ? `${esc(nick(mvp.playerId))} <small>${mvp.k} K · ${mvp.dmg} daño</small>` : '—'}</td>
+            </tr>`;
+        }).join('')}</tbody>
+    </table></div>`;
 }
 
 function cabeceraInforme(titulo, logo, etiqueta, f) {

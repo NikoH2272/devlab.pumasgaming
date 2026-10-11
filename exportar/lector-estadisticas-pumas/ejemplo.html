@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resultados · Pumas Gaming</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --c: #00f0ff; --t: #e8f6f8; --s: #9aa3b2; --g: #5d6577; --f: #05060a; --p: #0b0d14; --l: rgba(0, 240, 255, .16); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--f); color: var(--t); font-family: 'Rajdhani', sans-serif; font-size: 15px; }
+.hoja { max-width: 1150px; margin: 0 auto; padding: 28px 16px 60px; }
+h1 { font-family: 'Orbitron', sans-serif; font-size: 26px; letter-spacing: 1px; }
+h2 { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 3px; color: var(--c); text-transform: uppercase; margin: 28px 0 10px; padding-left: 10px; border-left: 3px solid var(--c); }
+.sub { color: var(--s); margin-top: 4px; }
+.carga { display: block; margin: 18px 0; padding: 34px 16px; text-align: center; border: 1px dashed rgba(0, 240, 255, .55); background: rgba(0, 240, 255, .03); cursor: pointer; }
+.carga.encima { background: rgba(0, 240, 255, .1); }
+.carga b { font-family: 'Orbitron', sans-serif; letter-spacing: 2px; display: block; margin-bottom: 6px; }
+.carga span { color: var(--s); }
+.aviso { color: #f5c542; margin: 8px 0; }
+.pestanas { display: flex; gap: 6px; flex-wrap: wrap; }
+.pestanas button { font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 1px; padding: 9px 14px; background: transparent; color: var(--c); border: 1px solid rgba(0, 240, 255, .35); cursor: pointer; }
+.pestanas button.activo { background: var(--c); color: #03060a; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+.kpi { background: var(--p); border: 1px solid var(--l); padding: 12px 14px; }
+.kpi b { display: block; font-family: 'Orbitron', sans-serif; font-size: 20px; color: var(--c); word-break: break-word; }
+.kpi span { color: var(--s); font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; }
+.tabla { width: 100%; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { font-family: 'Orbitron', sans-serif; font-size: 9.5px; letter-spacing: 1px; color: var(--s); text-transform: uppercase; padding: 8px; border-bottom: 1px solid var(--c); text-align: right; white-space: nowrap; cursor: pointer; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--l); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+tr.oro td { color: #f5c542; }
+small { color: var(--g); }
+.pos { color: #4ade80; } .neg { color: #e66767; }
+@media (max-width: 700px) { .kpis { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="hoja">
+    <h1>RESULTADOS · PUMAS GAMING</h1>
+    <p class="sub">Carga el CSV de estadísticas o el replay del juego (.bin + .json) de cada partida.</p>
+
+    <label class="carga" id="carga">
+        <input type="file" accept=".csv,.bin,.json" multiple hidden id="archivos">
+        <b>ARRASTRA AQUÍ LOS ARCHIVOS</b>
+        <span>.csv de estadísticas · o el .bin y el .json del replay (mismo nombre) · varias partidas a la vez</span>
+    </label>
+    <p class="aviso" id="aviso" hidden></p>
+
+    <div id="resultados" hidden>
+        <div class="pestanas" id="pestanas"></div>
+        <div id="cuerpo"></div>
+    </div>
+</div>
+
+<!-- El lector completo: un solo archivo, sin dependencias -->
+<script src="lector-estadisticas-pumas.js"></script>
+<script>
+const estado = { partidas: [], vista: 'torneo' };
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = (v, d = 0) => v === null || v === undefined ? '—' : Number(v).toLocaleString('es', { maximumFractionDigits: d, minimumFractionDigits: d });
+const pct = v => v === null || v === undefined ? '—' : Math.round(v * 100) + '%';
+const reloj = s => s == null ? '—' : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+
+async function cargar(lista) {
+    $('#aviso').hidden = false;
+    $('#aviso').textContent = 'Leyendo…';
+    const { partidas, avisos } = await LectorPumas.leerArchivos(lista);
+    partidas.forEach(p => {
+        estado.partidas = estado.partidas.filter(x => !(x.id === p.id && x.fuente === p.fuente));
+        estado.partidas.push(p);
+    });
+    $('#aviso').textContent = avisos.join(' · ');
+    $('#aviso').hidden = !avisos.length;
+    pintar();
+}
+
+function pintar() {
+    $('#resultados').hidden = !estado.partidas.length;
+    $('#pestanas').innerHTML = `<button class="${estado.vista === 'torneo' ? 'activo' : ''}" onclick="estado.vista='torneo'; pintar()">TORNEO</button>` +
+        estado.partidas.map((p, i) => `<button class="${estado.vista === i ? 'activo' : ''}" onclick="estado.vista=${i}; pintar()">${esc(p.mapa)} · ${p.fecha ? new Date(p.fecha).toLocaleDateString('es') : p.id.slice(-6)}</button>`).join('');
+    $('#cuerpo').innerHTML = estado.vista === 'torneo' ? torneo() : partida(estado.partidas[estado.vista]);
+}
+
+function torneo() {
+    const t = LectorPumas.tablaTorneo(estado.partidas);
+    return `
+    <div class="kpis">
+        <div class="kpi"><b>${t.partidas}</b><span>Partidas</span></div>
+        <div class="kpi"><b>${esc(t.equipos[0]?.equipo || '—')}</b><span>Líder · ${t.equipos[0]?.total ?? 0} pts</span></div>
+        <div class="kpi"><b>${esc(t.jugadores[0]?.jugador || '—')}</b><span>Más bajas · ${t.jugadores[0]?.bajas ?? 0}</span></div>
+        <div class="kpi"><b>${t.equipos.reduce((s, e) => s + e.bajas, 0)}</b><span>Bajas totales</span></div>
+    </div>
+    <h2>Tabla general</h2>
+    <div class="tabla"><table><thead><tr><th>#</th><th>Equipo</th><th>Partidas</th><th>Booyahs</th><th>Pts posición</th><th>Bajas</th><th>Total</th></tr></thead><tbody>
+    ${t.equipos.map(e => `<tr class="${e.posicion === 1 ? 'oro' : ''}"><td>${e.posicion}</td><td><b>${esc(e.equipo)}</b></td><td>${e.partidas}</td><td>${e.booyahs}</td><td>${e.puntosPosicion}</td><td>${e.bajas}</td><td><b>${e.total}</b></td></tr>`).join('')}
+    </tbody></table></div>
+    <h2>Jugadores</h2>
+    <div class="tabla"><table><thead><tr><th>#</th><th>Jugador</th><th>Partidas</th><th>Bajas</th><th>Bajas/partida</th><th>Daño</th><th>Daño/partida</th><th>Daño recibido</th><th>Derribos</th><th>Asist.</th><th>HS</th></tr></thead><tbody>
+    ${t.jugadores.map((j, i) => `<tr><td>${i + 1}</td><td><b>${esc(j.jugador)}</b><br><small>${esc(j.equipo)}</small></td><td>${j.partidas}</td><td>${j.bajas}</td><td>${num(j.bajasPorPartida, 2)}</td><td>${num(j.dano)}</td><td>${num(j.danoPorPartida)}</td><td>${num(j.danoRecibido)}</td><td>${num(j.derribos)}</td><td>${num(j.asistencias)}</td><td>${num(j.headshots)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <h2>Armas del torneo</h2>${tablaArmas(t.armas)}`;
+}
+
+function tablaArmas(armas) {
+    if (!armas.length) return '<p class="sub">Sin datos de armas.</p>';
+    return `<div class="tabla"><table><thead><tr><th>#</th><th>Arma</th><th>Jugadores</th><th>Bajas</th><th>Daño</th><th>Impactos</th><th>HS</th><th>% cabeza</th><th>Precisión</th></tr></thead><tbody>
+    ${armas.map((a, i) => `<tr><td>${i + 1}</td><td><b>${esc(a.nombre)}</b></td><td>${a.jugadores}</td><td>${a.bajas}</td><td>${num(a.dano)}</td><td>${num(a.impactos)}</td><td>${num(a.headshots)}</td><td>${pct(a.impactos ? a.headshots / a.impactos : null)}</td><td>${pct(a.precision)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function armasPorJugador(jugadores) {
+    return `<div class="tabla"><table><thead><tr><th>#</th><th>Jugador</th><th>Arma</th><th>Bajas</th><th>Daño</th><th>Impactos</th><th>HS</th><th>Precisión</th></tr></thead><tbody>
+    ${[...jugadores].sort((a, c) => (c.dano ?? 0) - (a.dano ?? 0)).flatMap((j, i) => j.armas.filter(a => a.dano || a.bajas || a.impactos).map((a, k) => `<tr>
+        <td>${k === 0 ? i + 1 : ''}</td><td>${k === 0 ? `<b>${esc(j.jugador)}</b><br><small>${esc(j.equipo)}</small>` : ''}</td>
+        <td>${esc(a.nombre)}</td><td>${a.bajas}</td><td>${num(a.dano)}</td><td>${num(a.impactos)}</td><td>${num(a.headshots)}</td><td>${pct(a.disparos ? a.impactos / a.disparos : null)}</td></tr>`)).join('')}
+    </tbody></table></div>`;
+}
+
+function partida(p) {
+    const top = [...p.jugadores].sort((a, c) => c.bajas - a.bajas || (c.dano ?? 0) - (a.dano ?? 0))[0];
+    return `
+    <div class="kpis">
+        <div class="kpi"><b>${esc(p.mapa)}</b><span>${p.fuente === 'csv' ? 'CSV oficial' : 'Desde el replay'}</span></div>
+        <div class="kpi"><b>${esc(p.equipos[0]?.equipo || '—')}</b><span>Booyah · ${p.equipos[0]?.total ?? 0} pts</span></div>
+        <div class="kpi"><b>${esc(top?.jugador || '—')}</b><span>MVP · ${top?.bajas ?? 0} bajas</span></div>
+        <div class="kpi"><b>${p.jugadores.reduce((s, j) => s + j.bajas, 0)}</b><span>Bajas en la sala</span></div>
+    </div>
+    <h2>Tabla de la partida</h2>
+    <div class="tabla"><table><thead><tr><th>Pos.</th><th>Equipo</th><th>Bajas</th><th>Pts posición</th><th>Total</th><th>Daño</th><th>Eliminado por</th></tr></thead><tbody>
+    ${p.equipos.map(e => `<tr class="${e.booyah ? 'oro' : ''}"><td>${e.posicion}</td><td><b>${esc(e.equipo)}</b><br><small>${e.jugadores.map(esc).join(' · ')}</small></td><td>${e.bajas}</td><td>${e.puntosPosicion}</td><td><b>${e.total}</b></td><td>${num(e.dano)}</td><td>${esc(e.eliminadoPor || '—')}</td></tr>`).join('')}
+    </tbody></table></div>
+    <h2>Jugadores</h2>
+    <div class="tabla"><table><thead><tr><th>#</th><th>Jugador</th><th>Bajas</th><th>Derribos</th><th>Asist.</th><th>Daño</th><th>Recibido</th><th>Balance</th><th>Impactos</th><th>Precisión</th><th>HS</th><th>% cabeza</th><th>Arma más usada</th><th>Derribado</th><th>Revivido</th><th>Rescates</th><th>Gloo</th><th>Vivo</th><th>En movimiento</th><th>Distancia</th></tr></thead><tbody>
+    ${[...p.jugadores].sort((a, c) => c.bajas - a.bajas || (c.dano ?? 0) - (a.dano ?? 0)).map((j, i) => `<tr><td>${i + 1}</td><td><b>${esc(j.jugador)}</b><br><small>${esc(j.equipo)}</small></td>
+        <td>${j.bajas}</td><td>${num(j.derribos)}</td><td>${num(j.asistencias)}</td><td>${num(j.dano)}</td><td>${num(j.danoRecibido)}</td>
+        <td class="${j.balance >= 0 ? 'pos' : 'neg'}">${j.balance === null ? '—' : (j.balance > 0 ? '+' : '') + num(j.balance)}</td>
+        <td>${num(j.impactos)}</td><td>${pct(j.precision)}</td><td>${num(j.headshots)}</td><td>${pct(j.pctCabeza)}</td><td>${esc(j.armaMasUsada || '—')}</td>
+        <td>${num(j.derribado)}</td><td>${num(j.revivido)}</td><td>${num(j.rescates)}</td><td>${num(j.gloo)}</td>
+        <td>${reloj(j.tiempoVivo)}</td><td>${reloj(j.tiempoMovimiento)}</td><td>${j.distancia ? num(j.distancia) + ' m' : '—'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <h2>Armas usadas</h2>${tablaArmas(p.armas)}
+    <h2>Armas por jugador</h2>${armasPorJugador(p.jugadores)}`;
+}
+
+const zona = $('#carga');
+$('#archivos').addEventListener('change', e => { cargar(e.target.files); e.target.value = ''; });
+['dragenter', 'dragover'].forEach(t => zona.addEventListener(t, e => { e.preventDefault(); zona.classList.add('encima'); }));
+['dragleave', 'drop'].forEach(t => zona.addEventListener(t, e => { e.preventDefault(); zona.classList.remove('encima'); }));
+zona.addEventListener('drop', e => cargar(e.dataTransfer.files));
+</script>
+</body>
+</html>

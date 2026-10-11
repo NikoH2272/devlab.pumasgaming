@@ -15,7 +15,7 @@ const TB_VEHICULOS = [
 const TB_PALETA = ['#00f0ff', '#e66767', '#f5c542', '#4ade80', '#a78bfa', '#ff8a3d', '#3987e5', '#d55181', '#9ca3af', '#ffffff'];
 
 function orgDeTrabajo() {
-    return Auth.usuario.orgId || (tbActual && tbActual.orgId) || null;
+    return Auth.orgActivaId;
 }
 
 // ---------- Apertura ----------
@@ -35,8 +35,9 @@ async function abrirEstrategia(tipo, registro = null) {
     $$('.sb-nav > button[data-vista="vista-tablero"]').forEach(b => b.classList.toggle('activo', b.dataset.modo === tipo));
     $('#tb-titulo').textContent = tipo === 'mapa' ? 'Mapas · caídas y rotaciones' : 'Vistas aéreas';
 
-    const orgs = await Auth.orgsVisibles();
-    tbActual = { id: registro?.id || null, tipo, orgId: registro?.orgId || Auth.usuario.orgId || orgs[0]?.id || null, fondo: registro?.fondo || null };
+    // Un plano siempre vive en la organización activa
+    if (registro && registro.orgId !== Auth.orgActivaId) return toast('Ese plano es de otra organización.', 'error');
+    tbActual = { id: registro?.id || null, tipo, orgId: Auth.orgActivaId, fondo: registro?.fondo || null };
     $('#tb-nombre').value = registro?.nombre || '';
     $('#tb-img-mapa-caja').hidden = !['admin', 'ceo', 'coach'].includes(Auth.usuario.rol);
 
@@ -57,9 +58,12 @@ async function abrirEstrategia(tipo, registro = null) {
     pintarAnalisisTablero();
 }
 
+// Imagen subida por la organización; si no hay, la incluida en iconosobs/mapas
 async function fondoDelMapa(mapa) {
-    try { return tbActual.orgId ? await DB.mapaImagen(tbActual.orgId, mapa) : null; }
-    catch (err) { return null; }
+    let propia = null;
+    try { propia = tbActual.orgId ? await DB.mapaImagen(tbActual.orgId, mapa) : null; }
+    catch (err) { /* sin tabla o sin conexión: se usa la incluida */ }
+    return propia || Tablero.imagenMapa(mapa);
 }
 
 async function cambiarMapaTablero(mapa) {
@@ -72,9 +76,18 @@ async function cambiarMapaTablero(mapa) {
 
 function alCambiarTablero(evento) {
     if (evento && evento.aviso) return mostrarPista(evento.aviso, true);
+    sincronizarApertura();
     marcarCambio();
     pintarEquiposTablero();
     pintarAnalisisTablero();
+}
+
+// El control de apertura muestra la del cono seleccionado
+function sincronizarApertura() {
+    const o = tablero.seleccion && tablero.seleccion.o;
+    if (!o || o.t !== 'vision') return;
+    $('#tb-apertura').value = o.ap;
+    $('#tb-apertura-txt').textContent = o.ap + '°';
 }
 
 function marcarCambio() {
@@ -93,16 +106,21 @@ function mostrarPista(txt, alerta = false) {
 function pintarHerramientas() {
     $('#tb-herr').innerHTML = Object.entries(TB_HERRAMIENTAS).map(([id, h]) => `
         <button type="button" class="tb-herr ${h.mapa ? 'solo-mapa' : ''}" data-h="${id}" onclick="elegirHerramienta('${id}')" title="${h.n}">
-            <i class="fa-solid ${h.i}"></i><span>${h.n}</span>
+            <i class="fa-solid ${h.i}"></i><span>${h.n}</span>${atajoDe(id) ? `<kbd>${atajoDe(id)}</kbd>` : ''}
         </button>`).join('');
 }
 
+function atajoDe(herr) {
+    return (Object.entries(TB_ATAJOS).find(([, h]) => h === herr) || [])[0]?.toUpperCase() || '';
+}
+
 function elegirHerramienta(id) {
+    if (id !== tablero.herr || id !== 'mover') tablero.seleccion = null;
     tablero.herr = id;
-    tablero.seleccion = null;
     $$('.tb-herr').forEach(b => b.classList.toggle('activo', b.dataset.h === id));
     $('#tb-opc-icono').hidden = id !== 'icono';
     $('#tb-opc-logo').hidden = id !== 'logo';
+    $('#tb-opc-vision').hidden = !['vision', 'mover'].includes(id);
     $('#tb-canvas').style.cursor = id === 'mover' ? 'grab' : 'crosshair';
     mostrarPista(TB_HERRAMIENTAS[id].pista);
     tablero.dibujar();
@@ -114,6 +132,47 @@ function pintarIconos() {
             <span class="fa-solid">${ic.u}</span>
         </button>`).join('');
 }
+
+function ponerApertura(grados) {
+    $('#tb-apertura-txt').textContent = grados + '°';
+    tablero.ponerApertura(grados);
+}
+
+// ---------- Estilo de trazo y acciones de selección ----------
+function ponerOpacidad(v) {
+    tablero.estilo.opacidad = v / 100;
+    $('#tb-opacidad-txt').textContent = v + '%';
+}
+
+function accionSeleccion(accion) {
+    if (accion === 'deshacer') return tablero.deshacer();
+    const hecho = tablero[accion]();
+    if (!hecho && accion !== 'pegar') mostrarPista('Primero elige una marca con Mover (V)', true);
+    if (hecho && accion === 'copiar') toast('Marca copiada. Pégala con Ctrl+V.');
+}
+
+// Atajos: V mover · L línea · F flecha · M jugador · T texto · C visión · R rectángulo
+// O círculo · P lápiz · B borrar · Supr borra la selección · Ctrl+Z/C/V/D
+document.addEventListener('keydown', ev => {
+    if (!tablero || !$('#vista-tablero').classList.contains('active-view')) return;
+    if (ev.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    const k = ev.key.toLowerCase();
+    if (ev.ctrlKey || ev.metaKey) {
+        const acciones = { z: 'deshacer', c: 'copiar', v: 'pegar', d: 'duplicar' };
+        if (!acciones[k]) return;
+        ev.preventDefault();
+        if (k === 'v' || k === 'd') elegirHerramienta('mover');
+        accionSeleccion(acciones[k]);
+        return;
+    }
+    if (k === 'delete' || k === 'backspace') { ev.preventDefault(); tablero.borrarSeleccion(); return; }
+    if (k === 'escape') return elegirHerramienta('mover');
+    const herr = TB_ATAJOS[k];
+    if (herr && TB_HERRAMIENTAS[herr] && (!TB_HERRAMIENTAS[herr].mapa || tablero.modo === 'mapa')) {
+        ev.preventDefault();
+        elegirHerramienta(herr);
+    }
+});
 
 function elegirIcono(id) {
     tablero.estilo.icono = id;
@@ -353,7 +412,7 @@ async function renderRepisa() {
     f.roster.value = sel;
 
     let lista;
-    try { lista = await DB.tableros(); }
+    try { lista = (await DB.tableros()).filter(t => t.orgId === Auth.orgActivaId); }
     catch (err) {
         $('#repisa-lista').innerHTML = `<p class="vacio">${esc(/tableros/.test(err.message) ? 'Falta ejecutar la migración 006_estrategia.sql en Supabase.' : err.message)}</p>`;
         return;

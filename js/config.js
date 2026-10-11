@@ -13,9 +13,19 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Debe coincidir con supabase/migrations/002_usuarios_sin_correo.sql.
 const DOMINIO_USUARIOS = 'usuarios.pumasgaming.com';
 
-// Módulos visibles en el menú (false = oculto, el código queda listo)
+// Módulos del menú que el admin puede prender o apagar en Ajustes > Módulos.
+// "roles" es el valor por defecto (si la migración 008 no corrió o el
+// módulo no se ha configurado). El admin siempre ve todo para probar.
+const TODOS_LOS_ROLES = ['admin', 'ceo', 'manager', 'coach', 'analista'];
 const MODULOS = {
-    estrategia: false   // Mapas, Vistas aéreas y Repisa
+    vision:       { n: 'Visión del equipo',   detalle: 'Dashboard, jugadores, combate, diagnóstico y partidas', vistas: ['vista-informe'], roles: TODOS_LOS_ROLES },
+    caidas:       { n: 'Caídas',              detalle: 'Zona principal y alterna por mapa', vistas: ['vista-caidas'], roles: TODOS_LOS_ROLES },
+    partidas:     { n: 'Partidas',            detalle: 'Registro de partidas y lectura con IA', vistas: ['vista-partida'], roles: TODOS_LOS_ROLES },
+    equipos:      { n: 'Equipos y jugadores', detalle: 'Rosters y jugadores', vistas: ['vista-equipos'], roles: TODOS_LOS_ROLES },
+    estrategia:   { n: 'Estrategia',          detalle: 'Mapas, vistas aéreas y repisa', vistas: ['vista-tablero', 'vista-repisa'], roles: ['admin'] },
+    mapstream:    { n: 'MapStream',           detalle: 'Repetición de partidas desde el replay del juego', vistas: ['vista-mapstream'], roles: ['admin'] },
+    estadisticas: { n: 'Estadísticas CSV',    detalle: 'Generar el CSV desde el replay y ver estadísticas por partida y torneo', vistas: ['vista-estadisticas'], roles: ['admin'] },
+    herramientas: { n: 'Herramientas',        detalle: 'Resultados (logs), módulos informativos y respaldo', vistas: ['modulo-resultados', 'modulo-admin', 'modulo-rendimiento', 'modulo-analisis'], roles: TODOS_LOS_ROLES }
 };
 
 // Nombre de la Edge Function que lee las capturas con Gemini

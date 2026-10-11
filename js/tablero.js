@@ -5,6 +5,19 @@
 // Todo se guarda en coordenadas lógicas (1000 de ancho), no en
 // píxeles: el plano se ve igual en un celular y en un monitor, y al
 // exportar en alta resolución nada se descoloca.
+//
+// MÓDULO PORTABLE: este archivo no depende del resto de la app.
+// Para llevarlo a otro proyecto copia:
+//   · js/tablero.js
+//   · la carpeta de imágenes de mapas (iconosobs/mapas/*.png)
+//   · Font Awesome 6 (íconos) y la fuente Orbitron (opcional)
+// y úsalo así:
+//   Tablero.rutaMapas = 'ruta/a/mapas/';      // si cambia la carpeta
+//   const t = new Tablero(canvas, { alCambiar: ev => {} });
+//   t.cargar(Tablero.docVacio(), Tablero.imagenMapa('Bermuda'));
+//   t.herr = 'vision';                         // cualquier clave de TB_HERRAMIENTAS
+//   t.doc -> JSON para guardar · t.lienzoExportado(1600) -> canvas para PNG
+// El canvas debe estar dentro de un contenedor con alto definido.
 // ============================================================
 
 const TB_ANCHO = 1000;
@@ -18,6 +31,7 @@ const TB_HERRAMIENTAS = {
     caliente: { n: 'Zona caliente', i: 'fa-fire',          pista: 'Toca y arrastra para marcar el radio de una zona disputada' },
     segura:   { n: 'Zona segura',   i: 'fa-circle-dot',    mapa: true, pista: 'Marca las fases de zona en orden (máx. 6) · el radio sale de la medida real' },
     avion:    { n: 'Avión',         i: 'fa-plane',         mapa: true, pista: 'Toca la entrada del avión y luego la salida' },
+    vision:   { n: 'Visión',        i: 'fa-eye',           pista: 'Toca el punto de vista y arrastra hacia donde mira · con Mover: tirador azul = dirección/alcance, amarillo = apertura' },
     jugador:  { n: 'Jugador',       i: 'fa-user',          pista: 'Toca para colocar a tus jugadores numerados' },
     icono:    { n: 'Ícono',         i: 'fa-icons',         pista: 'Elige un ícono abajo y toca el mapa para colocarlo' },
     texto:    { n: 'Texto',         i: 'fa-font',          pista: 'Toca donde quieras escribir' },
@@ -49,7 +63,25 @@ const TB_ICONOS = {
     estrella:  { n: 'Clave',      u: '' }
 };
 
+// Marcas que admiten línea punteada / que no se copian ni restilizan
+const TB_CON_LINEA = ['rect', 'elipse', 'linea', 'flecha', 'trazo'];
+const TB_NO_COPIABLES = ['caida', 'ruta', 'segura', 'avion'];
+
+// Atajos de teclado → herramienta
+const TB_ATAJOS = { v: 'mover', l: 'linea', f: 'flecha', m: 'jugador', t: 'texto', c: 'vision', r: 'rect', o: 'elipse', p: 'trazo', b: 'borrar' };
+
+// Imágenes de los mapas incluidas en el proyecto
+const TB_MAPAS_ARCHIVO = { Bermuda: 'bermuda.png', Purgatorio: 'purgatorio.png', Kalahari: 'kalahari.png', Nexterra: 'nexterra.png', Solara: 'solara.png' };
+
 class Tablero {
+    static rutaMapas = 'iconosobs/mapas/';
+
+    // Fondo por defecto de un mapa (null si no hay imagen incluida)
+    static imagenMapa(mapa) {
+        const archivo = TB_MAPAS_ARCHIVO[mapa];
+        return archivo ? Tablero.rutaMapas + archivo : null;
+    }
+
     constructor(canvas, { modo = 'mapa', alCambiar = () => {}, alSeleccionarEquipo = () => {} } = {}) {
         this.cv = canvas;
         this.cx = canvas.getContext('2d');
@@ -60,7 +92,8 @@ class Tablero {
         this.fondo = null;              // Image del fondo
         this.etiquetaFondo = '';        // texto en la cuadrícula si no hay imagen
         this.herr = 'mover';
-        this.estilo = { color: '#00f0ff', grosor: 4, relleno: false, icono: 'objetivo', logo: null };
+        this.estilo = { color: '#00f0ff', grosor: 4, relleno: false, icono: 'objetivo', logo: null, apertura: 70, opacidad: 1, punteado: false, rayado: false };
+        this.portapapeles = null;
         this.equipoSel = null;
         this.vista = { z: 1, x: 0, y: 0 };
         this.historial = [];
@@ -229,7 +262,7 @@ class Tablero {
         c.strokeRect(OX, OY, L, A);
 
         // Orden de capas: zonas debajo, marcas de equipos y jugadores encima
-        const orden = ['caliente', 'segura', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'ruta', 'icono', 'logo', 'caida', 'jugador', 'texto'];
+        const orden = ['caliente', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'ruta', 'icono', 'logo', 'caida', 'jugador', 'texto'];
         const objs = [...this.doc.objetos].sort((a, b) => orden.indexOf(a.t) - orden.indexOf(b.t));
         objs.forEach(o => this._objeto(c, o, P, k));
 
@@ -283,6 +316,8 @@ class Tablero {
     _objeto(c, o, P, k) {
         c.save();
         c.lineJoin = c.lineCap = 'round';
+        const op = o.op ?? 1;
+        c.globalAlpha = op;
         switch (o.t) {
             case 'caliente': {
                 const p = P(o), r = o.r * k;
@@ -335,15 +370,44 @@ class Tablero {
                 this._etiqueta(c, 'RUTA DEL AVIÓN', A.x, A.y - Math.max(12, k * 16), k);
                 break;
             }
+            case 'vision': {
+                const p = P(o), r = o.r * k, med = o.ap * Math.PI / 360;
+                const g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(1, r));
+                g.addColorStop(0, hexAlfa(o.color, 0.55));
+                g.addColorStop(0.7, hexAlfa(o.color, 0.22));
+                g.addColorStop(1, hexAlfa(o.color, 0.04));
+                c.fillStyle = g;
+                c.beginPath();
+                c.moveTo(p.x, p.y);
+                c.arc(p.x, p.y, r, o.ang - med, o.ang + med);
+                c.closePath();
+                c.fill();
+                c.strokeStyle = hexAlfa(o.color, 0.9);
+                c.lineWidth = Math.max(1, k * 1.6);
+                c.stroke();
+                // Línea central de la mirada
+                c.setLineDash([k * 6, k * 5]);
+                c.lineWidth = Math.max(1, k * 1.2);
+                c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x + Math.cos(o.ang) * r, p.y + Math.sin(o.ang) * r); c.stroke();
+                c.setLineDash([]);
+                const ro = Math.max(7, k * 9);
+                c.fillStyle = 'rgba(5, 5, 8, 0.9)';
+                c.beginPath(); c.arc(p.x, p.y, ro, 0, 7); c.fill();
+                c.strokeStyle = o.color; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
+                this._icono(c, TB_ICONOS.ojo.u, p.x, p.y, ro * 1.05, o.color);
+                break;
+            }
             case 'rect': {
                 const a = P(o.a), b = P(o.b);
                 c.strokeStyle = o.color;
                 c.lineWidth = Math.max(1, o.grosor * k);
                 if (o.relleno) {
-                    c.globalAlpha = 0.35; c.fillStyle = o.color;
+                    c.globalAlpha = op * (o.rayado ? 0.9 : 0.35);
+                    c.fillStyle = o.rayado ? this._rayas(c, o.color, k) : o.color;
                     c.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
-                    c.globalAlpha = 1;
+                    c.globalAlpha = op;
                 }
+                this._trazoPunteado(c, o, k);
                 c.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
                 break;
             }
@@ -353,7 +417,13 @@ class Tablero {
                 c.lineWidth = Math.max(1, o.grosor * k);
                 c.beginPath();
                 c.ellipse((a.x + b.x) / 2, (a.y + b.y) / 2, Math.abs(b.x - a.x) / 2, Math.abs(b.y - a.y) / 2, 0, 0, 7);
-                if (o.relleno) { c.globalAlpha = 0.35; c.fillStyle = o.color; c.fill(); c.globalAlpha = 1; }
+                if (o.relleno) {
+                    c.globalAlpha = op * (o.rayado ? 0.9 : 0.35);
+                    c.fillStyle = o.rayado ? this._rayas(c, o.color, k) : o.color;
+                    c.fill();
+                    c.globalAlpha = op;
+                }
+                this._trazoPunteado(c, o, k);
                 c.stroke();
                 break;
             }
@@ -363,7 +433,9 @@ class Tablero {
                 c.strokeStyle = c.fillStyle = o.color;
                 c.lineWidth = Math.max(1, o.grosor * k);
                 c.shadowColor = 'rgba(0,0,0,0.7)'; c.shadowBlur = k * 4;
+                this._trazoPunteado(c, o, k);
                 c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+                c.setLineDash([]);
                 if (o.t === 'flecha') this._punta(c, a, b, Math.max(8, o.grosor * k * 3.5));
                 break;
             }
@@ -372,6 +444,7 @@ class Tablero {
                 const pts = o.pts.map(P);
                 c.strokeStyle = o.color;
                 c.lineWidth = Math.max(1, o.grosor * k);
+                this._trazoPunteado(c, o, k);
                 c.beginPath(); c.moveTo(pts[0].x, pts[0].y);
                 pts.slice(1).forEach(p => c.lineTo(p.x, p.y));
                 c.stroke();
@@ -477,6 +550,33 @@ class Tablero {
         c.restore();
     }
 
+    _trazoPunteado(c, o, k) {
+        if (!o.dash) return;
+        const g = Math.max(1, o.grosor * k);
+        c.setLineDash([g * 3, g * 2.2]);
+    }
+
+    // Patrón de rayas diagonales para zonas rayadas
+    _rayas(c, color, k) {
+        const paso = Math.max(6, Math.round(k * 10));
+        const clave = color + paso;
+        this._patrones = this._patrones || {};
+        if (!this._patrones[clave]) {
+            const t = document.createElement('canvas');
+            t.width = t.height = paso;
+            const x = t.getContext('2d');
+            x.strokeStyle = color;
+            x.lineWidth = Math.max(1.5, paso / 5);
+            x.beginPath();
+            x.moveTo(-1, paso + 1); x.lineTo(paso + 1, -1);
+            x.moveTo(-1, 1); x.lineTo(1, -1);
+            x.moveTo(paso - 1, paso + 1); x.lineTo(paso + 1, paso - 1);
+            x.stroke();
+            this._patrones[clave] = t;
+        }
+        return c.createPattern(this._patrones[clave], 'repeat');
+    }
+
     _punta(c, a, b, t) {
         const ang = Math.atan2(b.y - a.y, b.x - a.x);
         c.beginPath();
@@ -514,6 +614,7 @@ class Tablero {
                 return { x1: o.x, y1: o.y, x2: o.x + w, y2: o.y + (o.s || 18) };
             }
             case 'caliente': case 'segura': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
+            case 'vision': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
             default: {
                 const r = o.t === 'icono' ? (o.s || 14) : 16;
                 return o.x !== undefined ? { x1: o.x - r, y1: o.y - r, x2: o.x + r, y2: o.y + r } : null;
@@ -521,7 +622,26 @@ class Tablero {
         }
     }
 
+    // Tiradores del cono: punta (dirección y alcance) y borde (apertura)
+    static puntaCono(o) { return { x: o.x + Math.cos(o.ang) * o.r, y: o.y + Math.sin(o.ang) * o.r }; }
+    static bordeCono(o) {
+        const a = o.ang + o.ap * Math.PI / 360;
+        return { x: o.x + Math.cos(a) * o.r, y: o.y + Math.sin(a) * o.r };
+    }
+
     _marcoSeleccion(c, sel, P, k) {
+        if (sel.o.t === 'vision') {
+            c.save();
+            [[Tablero.puntaCono(sel.o), '#00f0ff'], [Tablero.bordeCono(sel.o), '#f5c542']].forEach(([q, col]) => {
+                const p = P(q);
+                c.fillStyle = col;
+                c.strokeStyle = '#050508';
+                c.lineWidth = 2;
+                c.beginPath(); c.arc(p.x, p.y, 7, 0, 7); c.fill(); c.stroke();
+            });
+            c.restore();
+            return;
+        }
         const caja = this._caja(sel.o);
         if (!caja) return;
         const a = P({ x: caja.x1, y: caja.y1 }), b = P({ x: caja.x2, y: caja.y2 });
@@ -537,6 +657,12 @@ class Tablero {
     marcaEn(l) {
         const tol = 14 / this.k;
         const cerca = (p, r = tol) => Math.hypot(p.x - l.x, p.y - l.y) < r;
+        // Primero los tiradores del cono seleccionado
+        const sel = this.seleccion && this.seleccion.o;
+        if (sel && sel.t === 'vision' && this.doc.objetos.includes(sel)) {
+            if (cerca(Tablero.puntaCono(sel), 12 / this.k)) return { o: sel, tirador: 'punta' };
+            if (cerca(Tablero.bordeCono(sel), 12 / this.k)) return { o: sel, tirador: 'borde' };
+        }
         for (let i = this.doc.objetos.length - 1; i >= 0; i--) {
             const o = this.doc.objetos[i];
             switch (o.t) {
@@ -549,6 +675,12 @@ class Tablero {
                 }
                 case 'segura': if (Math.abs(Math.hypot(o.x - l.x, o.y - l.y) - o.r) < tol) return { o }; break;
                 case 'caliente': if (cerca(o, o.r)) return { o }; break;
+                case 'vision': {
+                    if (cerca(o, 16 / this.k)) return { o };
+                    const dif = difAngulo(Math.atan2(l.y - o.y, l.x - o.x), o.ang);
+                    if (Math.hypot(l.x - o.x, l.y - o.y) <= o.r && Math.abs(dif) <= o.ap * Math.PI / 360) return { o };
+                    break;
+                }
                 case 'linea': case 'flecha': if (distSegmento(l, o.a, o.b) < tol) return { o }; break;
                 case 'avion': if (o.a && o.b && distSegmento(l, o.a, o.b) < tol) return { o }; break;
                 case 'trazo':
@@ -616,6 +748,8 @@ class Tablero {
                 this.doc.objetos = this.doc.objetos.filter(o => o !== a.nuevo);
                 this.historial.pop();
             }
+            // Cono puesto con un toque, sin arrastrar: alcance por defecto
+            if (a.t === 'cono' && a.o.r < 15) a.o.r = 120;
             if (a.t !== 'pan') this.cambio();
         };
         cv.addEventListener('pointerup', soltar);
@@ -651,7 +785,7 @@ class Tablero {
             this.seleccion = m;
             if (m) {
                 this.instantanea();
-                this.arrastre = { t: 'mover', m, ultimo: l };
+                this.arrastre = m.tirador ? { t: 'cono-' + m.tirador, o: m.o } : { t: 'mover', m, ultimo: l };
                 if (m.o.eq && m.o.t === 'caida') this.seleccionarEquipo(m.o.eq);
             } else pan();
             this.dibujar();
@@ -670,7 +804,15 @@ class Tablero {
             return;
         }
 
-        const agregar = o => { this.instantanea(); this.doc.objetos.push(o); return o; };
+        const agregar = o => {
+            const e = this.estilo;
+            if (e.opacidad < 1 && !['caida', 'ruta', 'segura', 'avion'].includes(o.t)) o.op = e.opacidad;
+            if (e.punteado && TB_CON_LINEA.includes(o.t)) o.dash = true;
+            if (e.rayado && ['rect', 'elipse'].includes(o.t)) o.rayado = true;
+            this.instantanea();
+            this.doc.objetos.push(o);
+            return o;
+        };
         const { color, grosor, relleno } = this.estilo;
 
         if (h === 'caida' || h === 'ruta') {
@@ -714,6 +856,12 @@ class Tablero {
                 this.doc.objetos.push({ t: 'avion', a: l, b: null });
             } else av.b = l;
             this.cambio();
+            return;
+        }
+        if (h === 'vision') {
+            const o = agregar({ t: 'vision', x: l.x, y: l.y, ang: -Math.PI / 2, r: 0, ap: this.estilo.apertura, color });
+            this.arrastre = { t: 'cono', o };
+            this.dibujar();
             return;
         }
         if (h === 'jugador') {
@@ -767,6 +915,12 @@ class Tablero {
             } else desplazar(a.m.o, dx, dy);
         } else if (a.t === 'radio') {
             a.o.r = Math.max(a.min, Math.hypot(l.x - a.o.x, l.y - a.o.y));
+        } else if (a.t === 'cono' || a.t === 'cono-punta') {
+            const d = Math.hypot(l.x - a.o.x, l.y - a.o.y);
+            if (d > 3) { a.o.ang = Math.atan2(l.y - a.o.y, l.x - a.o.x); a.o.r = Math.max(a.t === 'cono' ? 0 : 15, d); }
+        } else if (a.t === 'cono-borde') {
+            const dif = Math.abs(difAngulo(Math.atan2(l.y - a.o.y, l.x - a.o.x), a.o.ang));
+            a.o.ap = Math.round(Math.min(360, Math.max(10, dif * 360 / Math.PI)));
         } else if (a.t === 'forma') {
             a.nuevo.b = l;
         } else if (a.t === 'trazo') {
@@ -774,6 +928,74 @@ class Tablero {
             if (Math.hypot(u.x - l.x, u.y - l.y) > 2) a.o.pts.push(l);
         }
         this.dibujar();
+    }
+
+    // ---------- Acciones sobre la marca seleccionada (herramienta Mover) ----------
+    get marcaSeleccionada() {
+        const o = this.seleccion && this.seleccion.o;
+        return o && this.doc.objetos.includes(o) ? o : null;
+    }
+
+    borrarSeleccion() {
+        const o = this.marcaSeleccionada;
+        if (!o) return false;
+        this.instantanea();
+        this.doc.objetos = this.doc.objetos.filter(x => x !== o);
+        this.seleccion = null;
+        this.cambio();
+        return true;
+    }
+
+    copiar() {
+        const o = this.marcaSeleccionada;
+        if (!o) return false;
+        if (TB_NO_COPIABLES.includes(o.t)) { this.avisar('Las marcas de equipos, zonas y avión no se copian'); return false; }
+        this.portapapeles = JSON.stringify(o);
+        return true;
+    }
+
+    pegar() {
+        if (!this.portapapeles) return false;
+        const o = JSON.parse(this.portapapeles);
+        desplazar(o, 20, 20);
+        this.portapapeles = JSON.stringify(o);   // el siguiente pegado sale corrido otra vez
+        if (o.t === 'jugador') o.n = this.doc.objetos.filter(x => x.t === 'jugador').length + 1;
+        this.instantanea();
+        this.doc.objetos.push(o);
+        this.seleccion = { o };
+        this.cambio();
+        return true;
+    }
+
+    duplicar() {
+        return this.copiar() && this.pegar();
+    }
+
+    // Aplica color, grosor, opacidad y trazo actuales a la marca seleccionada
+    aplicarEstilo() {
+        const o = this.marcaSeleccionada;
+        if (!o || TB_NO_COPIABLES.includes(o.t)) return false;
+        const e = this.estilo;
+        this.instantanea();
+        if ('color' in o) o.color = e.color;
+        if ('grosor' in o) o.grosor = e.grosor;
+        if ('relleno' in o) o.relleno = e.relleno;
+        if (e.opacidad < 1) o.op = e.opacidad; else delete o.op;
+        if (TB_CON_LINEA.includes(o.t)) { if (e.punteado) o.dash = true; else delete o.dash; }
+        if (['rect', 'elipse'].includes(o.t)) { if (e.rayado) o.rayado = true; else delete o.rayado; }
+        this.cambio();
+        return true;
+    }
+
+    // Apertura (grados) de los conos nuevos y del cono seleccionado
+    ponerApertura(grados) {
+        this.estilo.apertura = grados;
+        const o = this.seleccion && this.seleccion.o;
+        if (o && o.t === 'vision') {
+            this.instantanea();
+            o.ap = grados;
+            this.cambio();
+        }
     }
 
     avisar(txt) {
@@ -807,6 +1029,19 @@ function desplazar(o, dx, dy) {
         if (p && p.x !== undefined) { p.x += dx; p.y += dy; }
     });
     if (o.pts) o.pts.forEach(p => { p.x += dx; p.y += dy; });
+}
+
+// Diferencia entre dos ángulos en (-π, π]
+function difAngulo(a, b) {
+    const d = a - b;
+    return Math.atan2(Math.sin(d), Math.cos(d));
+}
+
+function hexAlfa(hex, a) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return `rgba(0, 240, 255, ${a})`;
+    const n = parseInt(m[1], 16);
+    return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
 function iniciales(n) {

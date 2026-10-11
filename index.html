@@ -7,7 +7,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css?v=11">
+    <link rel="stylesheet" href="css/style.css?v=14">
+    <link rel="stylesheet" href="css/moderno.css?v=18">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -60,23 +61,24 @@
             <i class="fa-solid fa-house"></i><span>Inicio</span>
         </button>
 
-        <button type="button" data-vista="vista-informe" onclick="irA('vista-informe')" title="Visión del equipo">
+        <button type="button" data-modulo="vision" data-vista="vista-informe" onclick="irA('vista-informe')" title="Visión del equipo">
             <i class="fa-solid fa-chart-column"></i><span>Visión del equipo</span>
         </button>
-        <div class="sb-sub" data-grupo="vista-informe">
+        <div class="sb-sub" data-modulo="vision" data-grupo="vista-informe">
             <button type="button" onclick="irAInforme('inf-equipo')">Dashboard</button>
             <button type="button" onclick="irAInforme('inf-plantilla')">Jugadores</button>
             <button type="button" onclick="irAInforme('inf-combate')">Combate</button>
             <button type="button" onclick="irAInforme('inf-diagnostico')">Diagnóstico</button>
+            <button type="button" onclick="irAInforme('inf-partidas')">Partidas</button>
         </div>
 
-        <button type="button" data-vista="vista-caidas" onclick="irA('vista-caidas')" title="Caídas">
+        <button type="button" data-modulo="caidas" data-vista="vista-caidas" onclick="irA('vista-caidas')" title="Caídas">
             <i class="fa-solid fa-parachute-box"></i><span>Caídas</span>
         </button>
-        <button type="button" data-vista="vista-partida" onclick="irA('vista-partida')" title="Partidas">
+        <button type="button" data-modulo="partidas" data-vista="vista-partida" onclick="irA('vista-partida')" title="Partidas">
             <i class="fa-solid fa-gamepad"></i><span>Partidas</span>
         </button>
-        <button type="button" data-vista="vista-equipos" onclick="irA('vista-equipos')" title="Equipos y jugadores">
+        <button type="button" data-modulo="equipos" data-vista="vista-equipos" onclick="irA('vista-equipos')" title="Equipos y jugadores">
             <i class="fa-solid fa-people-group"></i><span>Equipos y jugadores</span>
         </button>
         <button type="button" data-vista="vista-usuarios" data-permiso="usuario.ver" onclick="irA('vista-usuarios')" title="Usuarios">
@@ -89,7 +91,7 @@
             <i class="fa-solid fa-gear"></i><span>Ajustes</span>
         </button>
 
-        <div class="sb-titulo" data-modulo="estrategia"><span>Estrategia</span></div>
+        <div class="sb-titulo" data-modulo="estrategia mapstream estadisticas"><span>Estrategia</span></div>
         <button type="button" data-modulo="estrategia" data-vista="vista-tablero" data-modo="mapa" onclick="abrirEstrategia('mapa')" title="Mapas">
             <i class="fa-solid fa-map-location-dot"></i><span>Mapas</span>
         </button>
@@ -99,21 +101,27 @@
         <button type="button" data-modulo="estrategia" data-vista="vista-repisa" onclick="irA('vista-repisa')" title="Repisa">
             <i class="fa-solid fa-box-archive"></i><span>Repisa</span>
         </button>
+        <button type="button" data-modulo="mapstream" data-vista="vista-mapstream" onclick="abrirMapStream()" title="MapStream">
+            <i class="fa-solid fa-film"></i><span>MapStream</span>
+        </button>
+        <button type="button" data-modulo="estadisticas" data-vista="vista-estadisticas" onclick="abrirEstadisticas()" title="Estadísticas CSV">
+            <i class="fa-solid fa-table-list"></i><span>Estadísticas CSV</span>
+        </button>
 
-        <div class="sb-titulo"><span>Herramientas</span></div>
-        <button type="button" data-vista="modulo-resultados" onclick="mostrarSeccion('modulo-resultados', 'sec-resultados')" title="Resultados (logs)">
+        <div class="sb-titulo" data-modulo="herramientas"><span>Herramientas</span></div>
+        <button type="button" data-modulo="herramientas" data-vista="modulo-resultados" onclick="mostrarSeccion('modulo-resultados', 'sec-resultados')" title="Resultados (logs)">
             <i class="fa-solid fa-table-cells"></i><span>Resultados (logs)</span>
         </button>
-        <button type="button" data-vista="modulo-admin" onclick="mostrarSeccion('modulo-admin', 'sec-equipo')" title="Administrativo">
+        <button type="button" data-modulo="herramientas" data-vista="modulo-admin" onclick="mostrarSeccion('modulo-admin', 'sec-equipo')" title="Administrativo">
             <i class="fa-solid fa-folder-open"></i><span>Administrativo</span>
         </button>
-        <button type="button" data-vista="modulo-rendimiento" onclick="mostrarSeccion('modulo-rendimiento', 'sec-dashboard')" title="Rendimiento">
+        <button type="button" data-modulo="herramientas" data-vista="modulo-rendimiento" onclick="mostrarSeccion('modulo-rendimiento', 'sec-dashboard')" title="Rendimiento">
             <i class="fa-solid fa-chart-line"></i><span>Rendimiento</span>
         </button>
-        <button type="button" data-vista="modulo-analisis" onclick="mostrarSeccion('modulo-analisis', 'sec-zonas')" title="Análisis táctico">
+        <button type="button" data-modulo="herramientas" data-vista="modulo-analisis" onclick="mostrarSeccion('modulo-analisis', 'sec-zonas')" title="Análisis táctico">
             <i class="fa-solid fa-crosshairs"></i><span>Análisis táctico</span>
         </button>
-        <button type="button" onclick="exportarDatos()" title="Exportar respaldo">
+        <button type="button" data-modulo="herramientas" onclick="exportarDatos()" title="Exportar respaldo">
             <i class="fa-solid fa-download"></i><span>Exportar respaldo</span>
         </button>
     </div>
@@ -143,6 +151,7 @@
         <span class="bar"></span>
     </button>
     <div class="tb-estado"><span class="punto" id="punto-estado"></span><span id="statusSupabase">Verificando...</span></div>
+    <div class="org-activa" id="org-activa" title="Organización en la que trabajas"></div>
     <div class="tb-derecha" id="tb-usuario"></div>
 </header>
 
@@ -160,7 +169,7 @@
             <div class="card-box" style="text-align: left;">
                 <h3 class="card-titulo"><i class="fa-solid fa-server"></i> Sistema</h3>
                 <p>Logs procesados: <span id="statLogsCount">0 archivos</span></p>
-                <p>Datos: <strong style="color: var(--primary);">Supabase (compartidos con todo el staff)</strong></p>
+                <p>Datos: <strong style="color: var(--primary);">Supabase · solo los de tu organización</strong></p>
             </div>
         </div>
     </div>
@@ -194,7 +203,7 @@
                     <i class="fa-solid fa-upload"></i> Imagen del mapa
                     <input type="file" accept="image/*" hidden onchange="subirImagenMapa(this)">
                 </label>
-                <p class="ayuda">La imagen se comparte con toda la organización.</p>
+                <p class="ayuda">Se usa la imagen incluida del mapa; si subes otra, reemplaza a la incluida para toda la organización.</p>
             </div>
 
             <div class="tb-bloque solo-aerea">
@@ -209,6 +218,14 @@
             <div class="tb-bloque">
                 <h3>Herramientas</h3>
                 <div id="tb-herr" class="tb-herramientas"></div>
+                <div class="tb-seleccion" role="group" aria-label="Acciones sobre la marca seleccionada">
+                    <button type="button" class="btn-sec" onclick="accionSeleccion('copiar')" title="Copiar (Ctrl+C)"><i class="fa-solid fa-copy"></i></button>
+                    <button type="button" class="btn-sec" onclick="elegirHerramienta('mover'); accionSeleccion('pegar')" title="Pegar (Ctrl+V)"><i class="fa-solid fa-paste"></i></button>
+                    <button type="button" class="btn-sec" onclick="accionSeleccion('duplicar')" title="Duplicar (Ctrl+D)"><i class="fa-solid fa-clone"></i></button>
+                    <button type="button" class="btn-sec" onclick="accionSeleccion('aplicarEstilo')" title="Aplicar el estilo actual a la marca seleccionada"><i class="fa-solid fa-paintbrush"></i></button>
+                    <button type="button" class="btn-sec btn-peligro" onclick="accionSeleccion('borrarSeleccion')" title="Borrar la selección (Supr)"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                <p class="ayuda">Selecciona con Mover (V). Atajos en cada botón · Esc vuelve a Mover · Ctrl+Z deshace.</p>
             </div>
 
             <div class="tb-bloque">
@@ -220,7 +237,18 @@
                 <label class="tb-rango">Grosor / tamaño
                     <input type="range" min="1" max="12" value="4" oninput="tablero.estilo.grosor = Number(this.value)">
                 </label>
+                <label class="tb-rango">Opacidad <strong id="tb-opacidad-txt">100%</strong>
+                    <input type="range" min="15" max="100" step="5" value="100" oninput="ponerOpacidad(Number(this.value))">
+                </label>
                 <label class="check"><input type="checkbox" onchange="tablero.estilo.relleno = this.checked"> Rellenar formas</label>
+                <label class="check"><input type="checkbox" onchange="tablero.estilo.rayado = this.checked"> Relleno rayado (zona)</label>
+                <label class="check"><input type="checkbox" onchange="tablero.estilo.punteado = this.checked"> Línea punteada</label>
+                <div id="tb-opc-vision" hidden>
+                    <label class="tb-rango">Apertura del cono <strong id="tb-apertura-txt">70°</strong>
+                        <input type="range" id="tb-apertura" min="10" max="360" step="5" value="70" oninput="ponerApertura(Number(this.value))">
+                    </label>
+                    <p class="ayuda">Con Mover, toca un cono para ajustarlo: tirador azul = dirección y alcance, amarillo = apertura.</p>
+                </div>
                 <div id="tb-opc-icono" hidden>
                     <h3 style="margin-top:10px">Íconos</h3>
                     <div id="tb-iconos" class="tb-iconos"></div>
@@ -277,6 +305,110 @@
     </div>
 </section>
 
+<!-- ================= MAPSTREAM: REPETICIÓN DE PARTIDAS ================= -->
+<section id="vista-mapstream" class="view-section">
+    <div id="ms-carga" class="contenedor">
+        <span class="tb-kicker">// MapStream</span>
+        <h2 class="section-title">Repetición de partidas</h2>
+        <p class="tool-desc">Reproduce la partida sobre el mapa: rotaciones de cada equipo, cierre de zona y bajas, segundo a segundo.</p>
+        <label id="ms-drop" class="ms-drop">
+            <input type="file" accept=".json,.bin" multiple hidden onchange="msArchivos(this.files); this.value = ''">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <strong>ARRASTRA AQUÍ LA PARTIDA</strong>
+            <span>o haz clic para elegirlos · el <b>.bin</b> y el <b>.json</b> del replay del juego (mismo nombre) · puedes subir varios replays de la misma partida</span>
+        </label>
+        <div id="ms-aviso" class="nota" hidden></div>
+        <div class="tool-container ms-demo">
+            <div>
+                <h3 class="card-titulo"><i class="fa-solid fa-flask"></i> Probar con una partida demo</h3>
+                <p class="ayuda">12 equipos con datos inventados para ver cómo funciona el visor.</p>
+            </div>
+            <select id="ms-demo-mapa" aria-label="Mapa de la demo"></select>
+            <button type="button" class="btn-generar" onclick="msDemo()"><i class="fa-solid fa-play"></i> VER DEMO</button>
+        </div>
+    </div>
+
+    <div id="ms-visor" class="ms-layout" hidden>
+        <div class="ms-escena">
+            <div class="ms-lienzo"><canvas id="ms-canvas" aria-label="Repetición de la partida"></canvas>
+                <div class="tb-flot">
+                    <button type="button" class="btn-sec" onclick="mapstream.zoom(1.3)" title="Acercar" aria-label="Acercar"><i class="fa-solid fa-plus"></i></button>
+                    <button type="button" class="btn-sec" onclick="mapstream.zoom(1 / 1.3)" title="Alejar" aria-label="Alejar"><i class="fa-solid fa-minus"></i></button>
+                    <button type="button" class="btn-sec" onclick="mapstream.centrar(); msAlCambiarTiempo(mapstream.tiempo, true)" title="Centrar" aria-label="Centrar"><i class="fa-solid fa-expand"></i></button>
+                    <button type="button" class="btn-sec" onclick="msCaptura()" title="Guardar imagen" aria-label="Guardar imagen"><i class="fa-solid fa-camera"></i></button>
+                </div>
+                <div class="ms-reloj" id="ms-reloj">00:00</div>
+            </div>
+            <div class="ms-controles">
+                <button type="button" class="btn-sec" onclick="msSaltar(-10)" title="Atrás 10 s" aria-label="Atrás 10 segundos"><i class="fa-solid fa-backward"></i></button>
+                <button type="button" class="btn-generar ms-play" id="ms-play" onclick="msPlay()" aria-label="Reproducir o pausar"><i class="fa-solid fa-play"></i></button>
+                <button type="button" class="btn-sec" onclick="msSaltar(10)" title="Adelante 10 s" aria-label="Adelante 10 segundos"><i class="fa-solid fa-forward"></i></button>
+                <div class="ms-linea-caja">
+                    <div id="ms-marcas" class="ms-marcas"></div>
+                    <input type="range" id="ms-linea" min="0" max="1" step="0.5" value="0" oninput="mapstream.ir(Number(this.value))" aria-label="Línea de tiempo">
+                </div>
+                <span class="ms-total" id="ms-total">00:00</span>
+                <select aria-label="Velocidad" onchange="msVelocidad(this.value)">
+                    <option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+                    <option value="4">4×</option><option value="8">8×</option><option value="16">16×</option>
+                </select>
+            </div>
+            <div id="ms-fases" class="ms-fases"></div>
+        </div>
+
+        <aside class="ms-panel tb-panel">
+            <div class="tb-bloque tb-cabeza">
+                <span class="tb-kicker">// MapStream</span>
+                <h2 id="ms-titulo">Partida</h2>
+                <small id="ms-meta" class="ayuda"></small>
+                <div class="tb-fila-botones">
+                    <button type="button" class="btn-sec" onclick="MSInforme.abrir(mapstream.replay)"><i class="fa-solid fa-file-pdf"></i> Informe</button>
+                    <button type="button" class="btn-sec" onclick="msOtra()"><i class="fa-solid fa-folder-open"></i> Otra partida</button>
+                </div>
+            </div>
+            <div class="tb-bloque"><div id="ms-stats" class="ms-stats"></div></div>
+            <div class="tb-bloque">
+                <h3>Equipos</h3>
+                <div id="ms-equipos" class="ms-equipos"></div>
+            </div>
+            <div class="tb-bloque">
+                <h3>Registro de bajas</h3>
+                <div id="ms-bajas" class="ms-bajas"></div>
+            </div>
+            <div class="tb-bloque">
+                <h3>Mostrar</h3>
+                <div id="ms-capas" class="checks"></div>
+                <p class="ayuda">Espacio reproduce/pausa · ← → mueven 5 s · rueda o pellizco para acercar.</p>
+            </div>
+        </aside>
+    </div>
+</section>
+
+<!-- ================= ESTADÍSTICAS CSV ================= -->
+<section id="vista-estadisticas" class="view-section">
+    <div class="contenedor">
+        <span class="tb-kicker">// Estadísticas</span>
+        <h2 class="section-title">Estadísticas por jugador (CSV)</h2>
+        <p class="tool-desc">Carga los CSV oficiales de las partidas o genera el CSV desde el replay del juego (.bin + .json). Puedes cargar varias partidas para ver el torneo completo.</p>
+        <label id="est-drop" class="ms-drop">
+            <input type="file" accept=".csv,.bin,.json" multiple hidden onchange="estArchivos(this.files); this.value = ''">
+            <i class="fa-solid fa-file-csv"></i>
+            <strong>ARRASTRA AQUÍ CSV O REPLAYS</strong>
+            <span>.csv de estadísticas · o el <b>.bin</b> y el <b>.json</b> del replay (mismo nombre) para generar el CSV</span>
+        </label>
+        <div id="est-aviso" class="nota" hidden></div>
+        <p id="est-vacio" class="vacio">Todavía no hay partidas cargadas.</p>
+        <div id="est-contenido" hidden>
+            <div id="est-pestanas" class="est-pestanas">
+                <button type="button" class="btn-sec" data-v="partida" onclick="est.vista='partida'; estPintar()"><i class="fa-solid fa-gamepad"></i> Partida</button>
+                <button type="button" class="btn-sec" data-v="torneo" onclick="est.vista='torneo'; estPintar()"><i class="fa-solid fa-trophy"></i> Torneo (todas)</button>
+            </div>
+            <div id="est-partidas" class="est-partidas"></div>
+            <div id="est-cuerpo"></div>
+        </div>
+    </div>
+</section>
+
 <!-- ================= ESTRATEGIA: REPISA ================= -->
 <section id="vista-repisa" class="view-section">
     <div class="contenedor">
@@ -328,6 +460,18 @@
                 </div>
             </div>
             <button type="submit" class="btn-generar" style="margin-top: 15px;">GUARDAR AJUSTES</button>
+        </form>
+
+        <form id="form-modulos" class="tool-container" onsubmit="onGuardarModulos(event)">
+            <h3 class="card-titulo"><i class="fa-solid fa-toggle-on"></i> Módulos del menú</h3>
+            <p class="ayuda" style="margin-bottom: 12px;">Marca qué roles ven cada módulo. Desmarcar todo apaga el módulo para todos menos para ti: el admin siempre los ve para poder probarlos (en tu menú aparecen con un punto los que solo tú ves).</p>
+            <p id="modulos-aviso" class="nota nota-alerta" hidden>Ejecuta la migración <code>008_modulos.sql</code> en Supabase para poder guardar esta configuración. Mientras tanto se usan los valores por defecto.</p>
+            <div class="tabla-scroll"><table class="tabla-datos tabla-modulos" id="tabla-modulos"></table></div>
+            <div class="botones-fila">
+                <button type="submit" class="btn-generar">GUARDAR MÓDULOS</button>
+                <button type="button" class="btn-sec" onclick="modulosTodos(true)">Marcar todo</button>
+                <button type="button" class="btn-sec" onclick="modulosTodos(false)">Desmarcar todo</button>
+            </div>
         </form>
     </div>
 </section>
@@ -393,7 +537,7 @@
                     <tr><td>Crear rosters</td><td>✔</td><td>✔</td><td></td><td>✔</td><td></td></tr>
                     <tr><td>Registrar jugadores</td><td>✔</td><td>✔</td><td></td><td>✔ sus rosters</td><td></td></tr>
                     <tr><td>Registrar partidas</td><td>✔</td><td>✔</td><td></td><td>✔ sus rosters</td><td>✔ sus rosters</td></tr>
-                    <tr><td>Ver estadísticas</td><td>Todo</td><td>Toda su organización</td><td>Toda su organización</td><td>Sus rosters</td><td>Sus rosters</td></tr>
+                    <tr><td>Ver estadísticas</td><td>Todo, una organización a la vez</td><td>Toda su organización</td><td>Toda su organización</td><td>Sus rosters</td><td>Sus rosters</td></tr>
                     <tr><td>Cambiar roles</td><td>✔ todos</td><td>✔ manager, coach, analista</td><td></td><td></td><td></td></tr>
                 </tbody>
             </table></div>
@@ -646,13 +790,20 @@
     <img alt="Captura del marcador">
 </div>
 
-<script src="js/config.js?v=11"></script>
-<script src="js/db.js?v=11"></script>
-<script src="js/auth.js?v=11"></script>
-<script src="js/analytics.js?v=11"></script>
-<script src="js/tablero.js?v=11"></script>
-<script src="js/estrategia.js?v=11"></script>
-<script src="script.js?v=11"></script>
-<script src="js/app.js?v=11"></script>
+<script src="js/config.js?v=17"></script>
+<script src="js/db.js?v=14"></script>
+<script src="js/auth.js?v=14"></script>
+<script src="js/analytics.js?v=14"></script>
+<script src="js/tablero.js?v=14"></script>
+<script src="js/estrategia.js?v=16"></script>
+<script src="js/mapstream.js?v=15"></script>
+<script src="js/mapstream-replay.js?v=19"></script>
+<script src="js/mapstream-informe.js?v=17"></script>
+<script src="js/mapstream-vista.js?v=15"></script>
+<script src="js/estadisticas-csv.js?v=4"></script>
+<script src="js/estadisticas-vista.js?v=4"></script>
+<script src="js/resultados.js?v=14"></script>
+<script src="js/app.js?v=16"></script>
+<script src="js/animaciones.js?v=14"></script>
 </body>
 </html>

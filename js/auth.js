@@ -32,13 +32,42 @@ const PERMISOS = {
 };
 
 let usuarioActual = null;
+let orgActivaId = null;          // la organización en la que se trabaja ahora
+const CLAVE_ORG_ACTIVA = 'pumasDevLab.orgActiva';
 
 const Auth = {
     get usuario() { return usuarioActual; },
 
     async restaurar() {
         usuarioActual = (await DB.sesionActual()) ? await DB.perfilActual() : null;
+        if (usuarioActual) await this.elegirOrgInicial();
         return usuarioActual;
+    },
+
+    // ---------- Organización activa ----------
+    // Todo (rosters, partidas, usuarios, planos) se ve SIEMPRE dentro de una
+    // sola organización. Los demás roles están fijos en la suya; el admin
+    // elige en cuál trabaja desde la barra superior.
+    get orgActivaId() { return orgActivaId; },
+
+    async elegirOrgInicial() {
+        if (!this.esAdmin()) { orgActivaId = usuarioActual.orgId; return; }
+        const orgs = await DB.orgs();
+        let guardada = null;
+        try { guardada = localStorage.getItem(CLAVE_ORG_ACTIVA); } catch (e) { /* sin almacenamiento */ }
+        orgActivaId = (orgs.find(o => o.id === guardada) || orgs[0] || {}).id || null;
+    },
+
+    cambiarOrgActiva(id) {
+        if (!this.esAdmin()) return;
+        orgActivaId = id || null;
+        try { localStorage.setItem(CLAVE_ORG_ACTIVA, orgActivaId || ''); } catch (e) { /* sin almacenamiento */ }
+    },
+
+    // Todas las organizaciones (solo para administrarlas y para el selector)
+    async todasLasOrgs() {
+        const orgs = await DB.orgs();
+        return this.esAdmin() ? orgs : orgs.filter(o => o.id === usuarioActual.orgId);
     },
 
     async iniciar(email, password) {
@@ -49,11 +78,13 @@ const Auth = {
             throw new Error('Tu cuenta no tiene un rol asignado o está desactivada. Habla con tu administrador.');
         }
         usuarioActual = u;
+        await this.elegirOrgInicial();
         return u;
     },
 
     async cerrar() {
         usuarioActual = null;
+        orgActivaId = null;
         await DB.logout();
     },
 
@@ -77,27 +108,26 @@ const Auth = {
         return Object.keys(ROLES).filter(r => ROLES[r].nivel < nivel || (r === 'admin' && this.esAdmin()));
     },
 
-    // Organizaciones que el usuario puede ver
+    // Organización en la que se trabaja (lista de 0 o 1 elementos)
     async orgsVisibles() {
-        const orgs = await DB.orgs();
-        if (this.esAdmin()) return orgs;
-        return orgs.filter(o => o.id === usuarioActual.orgId);
+        return (await DB.orgs()).filter(o => o.id === orgActivaId);
     },
 
-    // Equipos (rosters) que el usuario puede ver.
-    // Admin: todos · CEO/Manager: todos los de su organización
+    // Equipos (rosters) que el usuario puede ver, siempre de la organización activa.
+    // Admin y CEO/Manager: todos los de la organización
     // Coach/Analista: solo los asignados
     async equiposVisibles() {
-        const teams = await DB.equipos();
+        const teams = (await DB.equipos()).filter(t => t.orgId === orgActivaId);
         if (this.esAdmin()) return teams;
         if (this.puede('equipo.verTodos')) return teams.filter(t => t.orgId === usuarioActual.orgId);
         return teams.filter(t => t.orgId === usuarioActual.orgId && usuarioActual.equipos.includes(t.id));
     },
 
-    // Usuarios que el usuario puede ver/gestionar
+    // Usuarios que el usuario puede ver/gestionar (de la organización activa;
+    // el admin también ve a los demás admins, que son globales)
     async usuariosVisibles() {
         const users = await DB.usuarios();
-        if (this.esAdmin()) return users;
+        if (this.esAdmin()) return users.filter(u => u.orgId === orgActivaId || u.rol === 'admin');
         if (['ceo', 'manager'].includes(usuarioActual.rol)) return users.filter(u => u.orgId === usuarioActual.orgId);
         // Coach: él mismo y los usuarios que creó
         return users.filter(u => u.id === usuarioActual.id || u.creadoPor === usuarioActual.id);

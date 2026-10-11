@@ -185,8 +185,13 @@ const DB = {
         const fila = await q(supabaseClient.from('ajustes').select('*').eq('id', 1).maybeSingle());
         return {
             soporteUrl: fila?.soporte_url || '', whatsappCanalUrl: fila?.whatsapp_canal_url || '',
-            iaLimiteUsuario: fila?.ia_limite_usuario ?? 10, iaLimiteGlobal: fila?.ia_limite_global ?? 200
+            iaLimiteUsuario: fila?.ia_limite_usuario ?? 10, iaLimiteGlobal: fila?.ia_limite_global ?? 200,
+            modulos: fila && 'modulos' in fila ? (fila.modulos || {}) : null    // null = falta la migración 008
         };
+    },
+
+    async guardarModulos(modulos) {
+        await q(supabaseClient.from('ajustes').update({ modulos, actualizado: new Date().toISOString() }).eq('id', 1));
     },
 
     async guardarAjustes({ soporteUrl, whatsappCanalUrl, iaLimiteUsuario, iaLimiteGlobal }) {
