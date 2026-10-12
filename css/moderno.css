@@ -470,3 +470,9 @@ tr.est-oro td:first-child { color: #f5c542; font-weight: 700; }
 .est-mapa { width: 100%; max-width: 600px; height: auto; display: block; border: 1px solid var(--borde); }
 .est-pos { color: var(--ok); font-weight: 700; }
 .est-neg { color: #e66767; font-weight: 700; }
+
+/* ---------- Pie: creador ---------- */
+footer .creador { margin-top: 6px; font-size: 0.9rem; }
+footer .creador a { color: var(--primary); text-decoration: none; font-weight: 700; transition: color 0.2s, text-shadow 0.2s; }
+footer .creador a:hover { color: #fff; text-shadow: 0 0 10px rgba(0, 240, 255, 0.7); }
+footer .creador i { margin-right: 3px; }

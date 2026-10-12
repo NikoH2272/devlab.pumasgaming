@@ -290,7 +290,7 @@ small { color:var(--g); }
     <td>${e(b.arma || '—')}</td><td>${a.faseDe(b.t) <= nF ? a.faseDe(b.t) : 'Final'}</td></tr>`).join('')}
   </tbody></table>
 
-  <div class="pie"><span>PUMAS DEV LAB · MapStream</span><span>Generado el ${new Date().toLocaleString('es')} · partida ${e(r.idPartida || '')}</span></div>
+  <div class="pie"><span>PUMAS DEV LAB · MapStream · creado por <a href="https://www.instagram.com/coach.nikoh/" target="_blank" rel="noopener noreferrer" style="color:#00f0ff;text-decoration:none">@coach.nikoh</a></span><span>Generado el ${new Date().toLocaleString('es')} · partida ${e(r.idPartida || '')}</span></div>
 </div></body></html>`;
         return html;
     }
