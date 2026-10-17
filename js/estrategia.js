@@ -23,7 +23,7 @@ async function abrirEstrategia(tipo, registro = null) {
     if (tbSinGuardar && !confirm('Hay cambios sin guardar en el plano abierto. ¿Descartarlos?')) return;
     await irA('vista-tablero');
     if (!tablero) {
-        tablero = new Tablero($('#tb-canvas'), { alCambiar: alCambiarTablero, alSeleccionarEquipo: pintarEquiposTablero });
+        tablero = new Tablero($('#tb-canvas'), { alCambiar: alCambiarTablero, alSeleccionarEquipo: pintarEquiposTablero, alSeleccionar: sincronizarPausa });
         pintarHerramientas();
         pintarIconos();
         $('#tb-vehiculo').innerHTML = TB_VEHICULOS.map(([id, n, kmh]) => `<option value="${id}">${n}${kmh ? ` · ${kmh} km/h` : ''}</option>`).join('');
@@ -77,6 +77,7 @@ async function cambiarMapaTablero(mapa) {
 function alCambiarTablero(evento) {
     if (evento && evento.aviso) return mostrarPista(evento.aviso, true);
     sincronizarApertura();
+    sincronizarPausa();
     marcarCambio();
     pintarEquiposTablero();
     pintarAnalisisTablero();
@@ -85,6 +86,7 @@ function alCambiarTablero(evento) {
 // El control de apertura muestra la del cono seleccionado
 function sincronizarApertura() {
     const o = tablero.seleccion && tablero.seleccion.o;
+    if (o && o.t === 'caliente') marcarCalor(o.nivel || 2);
     if (!o || o.t !== 'vision') return;
     $('#tb-apertura').value = o.ap;
     $('#tb-apertura-txt').textContent = o.ap + '°';
@@ -121,6 +123,8 @@ function elegirHerramienta(id) {
     $('#tb-opc-icono').hidden = id !== 'icono';
     $('#tb-opc-logo').hidden = id !== 'logo';
     $('#tb-opc-vision').hidden = !['vision', 'mover'].includes(id);
+    $('#tb-opc-calor').hidden = !['caliente', 'mover'].includes(id);
+    sincronizarPausa();
     $('#tb-canvas').style.cursor = id === 'mover' ? 'grab' : 'crosshair';
     mostrarPista(TB_HERRAMIENTAS[id].pista);
     tablero.dibujar();
@@ -136,6 +140,54 @@ function pintarIconos() {
 function ponerApertura(grados) {
     $('#tb-apertura-txt').textContent = grados + '°';
     tablero.ponerApertura(grados);
+}
+
+// ---------- Pausa en un punto (caída, parada o visor) ----------
+const TB_ACCIONES = ['Explorar', 'Lootear', 'Esperar zona', 'Curarse', 'Vigilar', 'Buscar vehículo', 'Pelear', 'Tomar casa'];
+
+function sincronizarPausa() {
+    const caja = $('#tb-opc-pausa');
+    if (!caja) return;
+    const sel = tablero && tablero.puntoPausa;
+    caja.hidden = !sel;
+    if (!sel) return;
+    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'En este visor' : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
+    $('#tb-pausa-titulo').textContent = titulo;
+    // No pisar lo que el usuario está escribiendo
+    if (document.activeElement !== $('#tb-pausa-nota')) $('#tb-pausa-nota').value = sel.p.nota || '';
+    if (document.activeElement !== $('#tb-pausa-seg')) $('#tb-pausa-seg').value = sel.p.pausa || '';
+}
+
+function ponerPausaTablero() {
+    tablero.ponerPausa($('#tb-pausa-nota').value, $('#tb-pausa-seg').value);
+}
+
+function accionPausa(nombre) {
+    $('#tb-pausa-nota').value = nombre;
+    if (!Number($('#tb-pausa-seg').value)) $('#tb-pausa-seg').value = 30;
+    ponerPausaTablero();
+}
+
+function sumarPausa(seg) {
+    const el = $('#tb-pausa-seg');
+    el.value = Math.max(0, (Number(el.value) || 0) + seg);
+    ponerPausaTablero();
+}
+
+function quitarPausa() {
+    $('#tb-pausa-nota').value = '';
+    $('#tb-pausa-seg').value = '';
+    ponerPausaTablero();
+}
+
+// Intensidad de la zona caliente (nuevas y la seleccionada)
+function ponerCalor(nivel) {
+    tablero.ponerCalor(nivel);
+    marcarCalor(nivel);
+}
+
+function marcarCalor(nivel) {
+    $$('#tb-calor button').forEach(b => b.classList.toggle('activo', Number(b.dataset.n) === nivel));
 }
 
 // ---------- Estilo de trazo y acciones de selección ----------
@@ -241,9 +293,14 @@ function pintarEquiposTablero() {
     $('#tb-n-equipos').textContent = eqs.length;
     $('#tb-equipos').innerHTML = eqs.length ? eqs.map(e => `
         <div class="tb-eq ${e.id === tablero.equipoSel ? 'sel' : ''}" style="border-left-color:${e.color}" onclick="tablero.seleccionarEquipo('${e.id}')">
-            ${e.logo ? `<img src="${esc(e.logo)}" alt="">` : `<span class="tb-eq-ini" style="color:${e.color}">${esc(iniciales(e.nombre))}</span>`}
+            <label class="tb-eq-logo" title="Cambiar el ícono de ${esc(e.nombre)}" onclick="event.stopPropagation()">
+                ${e.logo ? `<img src="${esc(e.logo)}" alt="">` : `<span class="tb-eq-ini" style="color:${e.color}">${esc(iniciales(e.nombre))}</span>`}
+                <i class="fa-solid fa-camera"></i>
+                <input type="file" accept="image/*" hidden onchange="logoEquipoTablero('${e.id}', this)">
+            </label>
             <div class="tb-eq-n"><strong>${esc(e.nombre)}</strong>
-                <small>${tablero.caidaDe(e.id) ? 'caída ✓' : 'sin caída'} · ${(tablero.rutaDe(e.id)?.pts.length || 0)} paradas${e.propio ? ' · propio' : ''}</small></div>
+                <small>${tablero.caidaDe(e.id) ? 'caída ✓' : 'sin caída'} · ${(tablero.rutaDe(e.id)?.pts.length || 0)} paradas${tablero.rutaDe(e.id, 'rutaB') ? ' · plan B' : ''}${e.propio ? ' · propio' : ''}</small></div>
+            ${e.logo ? `<button type="button" class="btn-link" onclick="event.stopPropagation(); logoEquipoTablero('${e.id}', null)" title="Quitar ícono" aria-label="Quitar ícono de ${esc(e.nombre)}"><i class="fa-solid fa-image"></i></button>` : ''}
             <button type="button" class="btn-link" onclick="event.stopPropagation(); tablero.quitarEquipo('${e.id}')" aria-label="Quitar ${esc(e.nombre)}">✕</button>
         </div>`).join('') : '<p class="ayuda">Agrega tus rosters y los rivales de la partida.</p>';
 }
@@ -254,15 +311,32 @@ async function agregarMisRosters() {
     if (!rosters.length) toast('No tienes rosters visibles en esta organización.', 'error');
 }
 
-function agregarRival(e) {
+async function agregarRival(e) {
     e.preventDefault();
     const f = e.target;
     const nombre = f.nombre.value.trim();
     if (!nombre) return;
     if (tablero.doc.equipos.length >= 24) return toast('Máximo 24 equipos por plano.', 'error');
-    tablero.agregarEquipo({ id: 'x_' + Date.now().toString(36), nombre: nombre.slice(0, 22), color: f.color.value, logo: null, propio: false });
+    const archivo = f.logo.files && f.logo.files[0];
+    const logo = archivo ? await comprimirImagen(archivo, 256, 0.9) : null;
+    tablero.agregarEquipo({ id: 'x_' + Date.now().toString(36), nombre: nombre.slice(0, 22), color: f.color.value, logo, propio: false });
     f.nombre.value = '';
+    f.logo.value = '';
+    $('#tb-rival-logo').classList.remove('listo');
     f.color.value = TB_PALETA[tablero.doc.equipos.length % TB_PALETA.length];
+}
+
+// Ícono de un equipo ya creado (input = null lo quita)
+async function logoEquipoTablero(id, input) {
+    const eq = tablero.equipo(id);
+    if (!eq) return;
+    const f = input && input.files && input.files[0];
+    if (input && !f) return;
+    const logo = f ? await comprimirImagen(f, 256, 0.9) : null;
+    tablero.instantanea();
+    eq.logo = logo;
+    tablero.cambio();
+    if (input) input.value = '';
 }
 
 // ---------- Análisis táctico (modo mapa) ----------
@@ -276,6 +350,7 @@ function analizarPlano() {
     const m = u => u * metrosPorUnidad(mapa);
     const vehiculo = TB_VEHICULOS.find(v => v[0] === $('#tb-vehiculo').value) || TB_VEHICULOS[0];
     const vel = vehiculo[2] ? vehiculo[2] / 3.6 : TB_VEL_PIE;
+    const largoDe = pts => { let s = 0; for (let i = 0; i < pts.length - 1; i++) s += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); return s; };
 
     const otros = doc.equipos.filter(e => e.id !== yo.id).map(e => ({ e, c: tablero.caidaDe(e.id) })).filter(x => x.c);
     const ruta = tablero.rutaDe(yo.id);
@@ -289,18 +364,34 @@ function analizarPlano() {
     }) : [];
     const masCerca = otros.map(x => ({ n: x.e.nombre, d: Math.hypot(x.c.x - caida.x, x.c.y - caida.y) })).sort((a, b) => a.d - b.d)[0];
 
-    let largo = 0;
-    for (let i = 0; i < camino.length - 1; i++) largo += Math.hypot(camino[i + 1].x - camino[i].x, camino[i + 1].y - camino[i].y);
+    const largo = largoDe(camino);
+    const rutaB = tablero.rutaDe(yo.id, 'rutaB');
+    const caminoB = rutaB ? [caida, ...rutaB.pts] : null;
+
+    // Zonas calientes que toca cada plan (y las que rodean la caída)
+    const calientesDe = pts => {
+        const s = new Set();
+        for (let i = 0; i < pts.length - 1; i++) tablero.calientesEnTramo(pts[i], pts[i + 1]).forEach(o => s.add(o));
+        return [...s];
+    };
+    const enCaida = doc.objetos.filter(o => o.t === 'caliente' && Math.hypot(o.x - caida.x, o.y - caida.y) < o.r);
+    const calA = camino.length > 1 ? calientesDe(camino).filter(o => !enCaida.includes(o)) : [];
+    const planB = caminoB && caminoB.length > 1 ? {
+        largo: largoDe(caminoB),
+        calientes: calientesDe(caminoB).filter(o => !enCaida.includes(o)),
+        cruces: otros.filter(x => !vecinos.includes(x) && caminoB.some((p, i) => i < caminoB.length - 1 && distSegmento(x.c, p, caminoB[i + 1]) < TB_RADIO))
+    } : null;
 
     const franjas = [0, 0, 0];
     doc.equipos.forEach(e => { const c = tablero.caidaDe(e.id); if (c) franjas[Math.min(2, Math.floor(c.x / (TB_ANCHO / 3)))]++; });
 
     const fases = doc.objetos.filter(o => o.t === 'segura').sort((a, b) => a.n - b.n).map(z => {
-        const fase = TB_ZONAS[z.n - 1];
+        const fase = zonasDe(mapa)[z.n - 1];
+        if (!fase) return null;
         const fuera = Math.max(0, Math.hypot(z.x - caida.x, z.y - caida.y) - z.r);
         const viaje = m(fuera) / vel;
         return { n: z.n, fase, dentro: fuera === 0, metros: Math.round(m(fuera)), viaje, margen: fase.fin - viaje };
-    });
+    }).filter(Boolean);
 
     // Distancia a la ruta del avión (planeo estimado: 45 m/s, alcance ~900 m)
     let avion = null;
@@ -313,11 +404,15 @@ function analizarPlano() {
     }
 
     const exp = vecinos.length + cruces.length;
-    return { yo, caida, vecinos, cruces, exp, masCerca, largo, franjas, fases, avion, vehiculo, vel, m };
+    return { yo, caida, vecinos, cruces, exp, masCerca, largo, franjas, fases, avion, vehiculo, vel, m, enCaida, calA, planB };
 }
 
 function pintarAnalisisTablero() {
     if (!tablero || tablero.modo !== 'mapa') return;
+    // Los tiempos de cada parada en el mapa usan el transporte elegido
+    const v = TB_VEHICULOS.find(x => x[0] === $('#tb-vehiculo').value) || TB_VEHICULOS[0];
+    const vel = v[2] ? v[2] / 3.6 : TB_VEL_PIE;
+    if (tablero.velocidadRuta !== vel) { tablero.velocidadRuta = vel; tablero.dibujar(); }
     const a = analizarPlano();
     const cont = $('#tb-analisis');
     if (!a) { cont.innerHTML = '<p class="ayuda">Elige tu equipo en la lista para analizar su plan.</p>'; return; }
@@ -336,21 +431,36 @@ function pintarAnalisisTablero() {
         <div class="tb-dato"><span>Equipos por zona</span></div>
         ${a.franjas.map((v, i) => `<div class="tb-barra"><span>${nombres[i]}</span><i><b style="width:${v / maxF * 100}%"></b></i><strong>${v}</strong></div>`).join('')}
         ${a.largo ? `
-        <div class="tb-dato"><span>Rotación (${TB_LADO_MAPA[tablero.mapaActual]} m de mapa)</span></div>
+        <div class="tb-dato"><span>Rotación${a.planB ? ' A' : ''} (mapa de ${TB_LADO_MAPA[tablero.mapaActual]} m)</span></div>
         <div class="tb-fila"><span>Distancia</span><strong>${Math.round(a.m(a.largo))} m</strong></div>
         <div class="tb-fila"><span>${esc(a.vehiculo[1])}</span><strong>${relojTxt(a.m(a.largo) / a.vel)}</strong></div>
         ${a.vehiculo[2] ? `<div class="tb-fila"><span>A pie</span><strong>${relojTxt(a.m(a.largo) / TB_VEL_PIE)}</strong></div>` : ''}` : ''}
+        ${a.planB ? `
+        <div class="tb-dato"><span>Plan A vs plan B</span></div>
+        <div class="tb-fila"><span></span><span><strong>A</strong> · <strong>B</strong></span></div>
+        <div class="tb-fila"><span>Distancia</span><strong>${Math.round(a.m(a.largo))} m · ${Math.round(a.m(a.planB.largo))} m</strong></div>
+        <div class="tb-fila"><span>${esc(a.vehiculo[1])}</span><strong>${relojTxt(a.m(a.largo) / a.vel)} · ${relojTxt(a.m(a.planB.largo) / a.vel)}</strong></div>
+        <div class="tb-fila"><span>Equipos que cruza</span><strong>${a.cruces.length} · ${a.planB.cruces.length}</strong></div>
+        <div class="tb-fila"><span>Zonas calientes</span><strong>${a.calA.length} · ${a.planB.calientes.length}</strong></div>
+        <p class="ayuda">${(() => {
+            const pa = a.cruces.length + a.calA.length * 2, pb = a.planB.cruces.length + a.planB.calientes.length * 2;
+            return pa === pb ? (a.largo <= a.planB.largo ? 'Mismo riesgo: A es más corta.' : 'Mismo riesgo: B es más corta.') : pa < pb ? 'A es la rotación más limpia.' : 'B es la rotación más limpia: úsala si llegan tarde o la caída se complica.';
+        })()}</p>` : ''}
+        ${a.enCaida.length || a.calA.length ? `
+        <div class="tb-dato"><span>Zonas calientes</span></div>
+        ${a.enCaida.map(o => `<div class="tb-fila"><span><i class="tb-punto" style="background:${TB_CALOR[o.nivel || 2].color}"></i>Caes dentro de una zona ${TB_CALOR[o.nivel || 2].n.toLowerCase()}</span></div>`).join('')}
+        ${a.calA.map(o => `<div class="tb-fila"><span><i class="tb-punto" style="background:${TB_CALOR[o.nivel || 2].color}"></i>La rotación cruza una zona ${TB_CALOR[o.nivel || 2].n.toLowerCase()}</span><strong class="${(o.nivel || 2) === 3 ? 'mal' : ''}">${(o.nivel || 2) === 3 ? 'evítala' : 'con cuidado'}</strong></div>`).join('')}` : ''}
         ${a.avion ? `
         <div class="tb-dato"><span>Salto desde el avión (estimado)</span></div>
         <div class="tb-fila"><span>Planeo</span><strong class="${a.avion.lejos ? 'mal' : ''}">${a.avion.metros} m${a.avion.lejos ? ' · fuera de alcance' : ''}</strong></div>
         <div class="tb-fila"><span>En el aire</span><strong>${relojTxt(a.avion.planeo)}</strong></div>` : ''}
         ${a.fases.length ? `
         <div class="tb-dato"><span>Fases de zona · llegada desde la caída</span></div>
-        ${a.fases.map(f => `<div class="tb-fila"><span>Z${f.n} · cierra ${relojTxt(f.fase.fin)} · ${f.fase.dano} HP/s</span>
+        ${a.fases.map(f => `<div class="tb-fila"><span>Z${f.n} · ⌀ ${f.fase.r * 2} m · cierra ${relojTxt(f.fase.fin)} · ${f.fase.dano} HP/s</span>
             <strong class="${f.dentro || f.margen > 45 ? 'bien' : f.margen > 0 ? '' : 'mal'}">${f.dentro ? 'dentro ✓' : `${f.metros} m · ${f.margen > 0 ? 'sobran ' + relojTxt(f.margen) : 'tarde ' + relojTxt(-f.margen)}`}</strong></div>`).join('')}` : ''}
         ${a.cruces.length ? `<div class="tb-dato"><span>Tu rotación cruza con</span></div>
             ${a.cruces.map(x => `<div class="tb-fila"><span><i class="tb-punto" style="background:${x.e.color}"></i>${esc(x.e.nombre)}</span></div>`).join('')}` : ''}
-        <p class="ayuda" style="margin-top:8px">Medidas y tiempos aproximados del juego; el planeo es una estimación.</p>`;
+        <p class="ayuda" style="margin-top:8px">Escala y fases de zona calibradas con partidas oficiales (tiempos desde que despega el avión). El planeo es una estimación.</p>`;
 }
 
 // ---------- Guardar, exportar, nuevo ----------
@@ -387,6 +497,38 @@ function descargarTablero() {
         a.click();
         setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
     }, 'image/png');
+}
+
+let tbGrabando = false;
+async function descargarVideoTablero(btn) {
+    if (tbGrabando) return;
+    if (!tablero.doc.objetos.length) return toast('El plano está vacío: no hay nada que animar.', 'error');
+    tbGrabando = true;
+    const html = btn.innerHTML;
+    btn.disabled = true;
+    const nombrePlano = $('#tb-nombre').value.trim();
+    const titulo = `PUMAS GAMING · ${tbActual.tipo === 'mapa' ? tablero.mapaActual.toUpperCase() : 'VISTA AÉREA'}${nombrePlano ? ' · ' + nombrePlano.toUpperCase() : ''}`;
+    toast('Grabando el video… deja esta pestaña abierta y a la vista.');
+    try {
+        const { blob, ext } = await tablero.grabarVideo({
+            titulo,
+            alProgreso: f => { btn.innerHTML = `<i class="fa-solid fa-circle" style="color:#ff3b30"></i> ${Math.round(f * 100)}%`; }
+        });
+        const nombre = (nombrePlano || (tbActual.tipo === 'mapa' ? tablero.mapaActual : 'vista-aerea')).toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '-');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `pumas-${nombre}-${fechaLocal(new Date())}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+        toast(`Video listo (${ext.toUpperCase()}).`);
+    } catch (err) {
+        toast(err.message, 'error');
+    } finally {
+        tbGrabando = false;
+        btn.disabled = false;
+        btn.innerHTML = html;
+    }
 }
 
 function nuevoTablero() {

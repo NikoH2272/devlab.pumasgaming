@@ -476,3 +476,25 @@ footer .creador { margin-top: 6px; font-size: 0.9rem; }
 footer .creador a { color: var(--primary); text-decoration: none; font-weight: 700; transition: color 0.2s, text-shadow 0.2s; }
 footer .creador a:hover { color: #fff; text-shadow: 0 0 10px rgba(0, 240, 255, 0.7); }
 footer .creador i { margin-right: 3px; }
+
+/* ---------- Mapas: ícono de equipo y zona caliente ---------- */
+.tb-eq-logo { position: relative; flex: none; cursor: pointer; display: flex; }
+.tb-eq-logo > i { position: absolute; right: -4px; bottom: -4px; font-size: 9px; padding: 3px; background: var(--dark, #050508); color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.4); opacity: 0; transition: opacity 0.2s; }
+.tb-eq:hover .tb-eq-logo > i, .tb-eq-logo:focus-within > i { opacity: 1; }
+.tb-rival-logo { width: 38px; height: 38px; flex: none; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.tb-rival-logo.listo { color: #4ade80; border-color: #4ade80; }
+.tb-calor { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tb-calor button { padding: 7px 4px; background: rgba(5, 5, 8, 0.6); border: 1px solid rgba(255, 255, 255, 0.12); border-bottom: 3px solid var(--c); color: #cfd3dc; font: inherit; font-size: 12px; cursor: pointer; transition: background 0.2s, color 0.2s; }
+.tb-calor button i { color: var(--c); }
+.tb-calor button.activo { background: color-mix(in srgb, var(--c) 22%, transparent); color: #fff; border-color: var(--c); }
+.tb-fila-botones { flex-wrap: wrap; }
+.tb-fila-botones .btn-sec { flex: 1 1 calc(50% - 6px); }
+
+/* ---------- Mapas: pausa en un punto ---------- */
+.tb-pausa { border-left: 3px solid #00f0ff; padding-left: 8px; }
+.tb-pausa-acciones { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.tb-pausa-acciones button { padding: 4px 7px; font: inherit; font-size: 11px; background: rgba(0, 240, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.3); color: #cfd3dc; cursor: pointer; }
+.tb-pausa-acciones button:hover { background: rgba(0, 240, 255, 0.18); color: #fff; }
+.tb-pausa-campos { display: flex; gap: 6px; }
+.tb-pausa-campos input:first-child { flex: 1; min-width: 0; }
+.tb-pausa-campos input[type="number"] { width: 70px; flex: none; }

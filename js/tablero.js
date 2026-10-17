@@ -27,8 +27,10 @@ const TB_FA = '"Font Awesome 6 Free"';
 const TB_HERRAMIENTAS = {
     mover:    { n: 'Mover',         i: 'fa-up-down-left-right', pista: 'Arrastra una marca para moverla · doble clic en un texto para editarlo · arrastra el fondo para desplazarte' },
     caida:    { n: 'Caída',         i: 'fa-location-dot',  mapa: true, pista: 'Elige un equipo en la lista y toca el mapa donde cae' },
-    ruta:     { n: 'Rotación',      i: 'fa-route',         mapa: true, pista: 'La rotación sale de la caída del equipo · toca las paradas en orden' },
-    caliente: { n: 'Zona caliente', i: 'fa-fire',          pista: 'Toca y arrastra para marcar el radio de una zona disputada' },
+    ruta:     { n: 'Rotación',      i: 'fa-route',         mapa: true, pista: 'La rotación sale de la caída del equipo · toca las paradas en orden · cada parada muestra el tiempo de llegada' },
+    rutaB:    { n: 'Ruta B',        i: 'fa-code-branch',   mapa: true, pista: 'Rotación alterna (plan B) del equipo elegido · sale de la caída, igual que la principal' },
+    medir:    { n: 'Medir',         i: 'fa-ruler',         mapa: true, pista: 'Arrastra entre dos puntos: distancia real y tiempo a pie y en vehículo' },
+    caliente: { n: 'Zona caliente', i: 'fa-fire',          pista: 'Toca y arrastra el radio de una zona disputada · elige la intensidad en el panel' },
     segura:   { n: 'Zona segura',   i: 'fa-circle-dot',    mapa: true, pista: 'Marca las fases de zona en orden (máx. 6) · el radio sale de la medida real' },
     avion:    { n: 'Avión',         i: 'fa-plane',         mapa: true, pista: 'Toca la entrada del avión y luego la salida' },
     vision:   { n: 'Visión',        i: 'fa-eye',           pista: 'Toca el punto de vista y arrastra hacia donde mira · con Mover: tirador azul = dirección/alcance, amarillo = apertura' },
@@ -65,7 +67,16 @@ const TB_ICONOS = {
 
 // Marcas que admiten línea punteada / que no se copian ni restilizan
 const TB_CON_LINEA = ['rect', 'elipse', 'linea', 'flecha', 'trazo'];
-const TB_NO_COPIABLES = ['caida', 'ruta', 'segura', 'avion'];
+const TB_NO_COPIABLES = ['caida', 'ruta', 'rutaB', 'segura', 'avion'];
+
+// Zona caliente: intensidad 1 baja · 2 media · 3 alta
+const TB_CALOR = {
+    1: { n: 'BAJA', color: '#f5c542', rgb: '245, 197, 66' },
+    2: { n: 'MEDIA', color: '#ff8a3d', rgb: '255, 138, 61' },
+    3: { n: 'ALTA', color: '#ff3b30', rgb: '255, 59, 48' }
+};
+const TB_VEL_A_PIE = 6.5;       // m/s corriendo
+const TB_VEL_VEHICULO = 31;     // m/s (~110 km/h, camioneta)
 
 // Atajos de teclado → herramienta
 const TB_ATAJOS = { v: 'mover', l: 'linea', f: 'flecha', m: 'jugador', t: 'texto', c: 'vision', r: 'rect', o: 'elipse', p: 'trazo', b: 'borrar' };
@@ -82,17 +93,19 @@ class Tablero {
         return archivo ? Tablero.rutaMapas + archivo : null;
     }
 
-    constructor(canvas, { modo = 'mapa', alCambiar = () => {}, alSeleccionarEquipo = () => {} } = {}) {
+    constructor(canvas, { modo = 'mapa', alCambiar = () => {}, alSeleccionarEquipo = () => {}, alSeleccionar = () => {} } = {}) {
         this.cv = canvas;
         this.cx = canvas.getContext('2d');
         this.modo = modo;
         this.alCambiar = alCambiar;
+        this.alSeleccionar = alSeleccionar;
         this.alSeleccionarEquipo = alSeleccionarEquipo;
         this.doc = Tablero.docVacio();
         this.fondo = null;              // Image del fondo
         this.etiquetaFondo = '';        // texto en la cuadrícula si no hay imagen
         this.herr = 'mover';
-        this.estilo = { color: '#00f0ff', grosor: 4, relleno: false, icono: 'objetivo', logo: null, apertura: 70, opacidad: 1, punteado: false, rayado: false };
+        this.estilo = { color: '#00f0ff', grosor: 4, relleno: false, icono: 'objetivo', logo: null, apertura: 70, opacidad: 1, punteado: false, rayado: false, calor: 2 };
+        this.velocidadRuta = TB_VEL_A_PIE;   // m/s para los tiempos de la rotación (lo cambia el panel)
         this.portapapeles = null;
         this.equipoSel = null;
         this.vista = { z: 1, x: 0, y: 0 };
@@ -198,8 +211,43 @@ class Tablero {
         return this.doc.objetos.find(o => o.t === 'caida' && o.eq === id) || null;
     }
 
-    rutaDe(id) {
-        return this.doc.objetos.find(o => o.t === 'ruta' && o.eq === id) || null;
+    rutaDe(id, tipo = 'ruta') {
+        return this.doc.objetos.find(o => o.t === tipo && o.eq === id) || null;
+    }
+
+    // Zonas calientes que toca un tramo (centro a menos de su radio del segmento)
+    calientesEnTramo(a, b) {
+        return this.doc.objetos.filter(o => o.t === 'caliente' && distSegmento(o, a, b) < o.r);
+    }
+
+    // Punto que admite pausa: caída, parada de una rotación o cono de visión
+    get puntoPausa() {
+        const o = this.marcaSeleccionada;
+        if (!o) return null;
+        if (o.t === 'caida' || o.t === 'vision') return { p: o, tipo: o.t };
+        if ((o.t === 'ruta' || o.t === 'rutaB') && o.pts[this.seleccion.j]) return { p: o.pts[this.seleccion.j], tipo: 'parada', n: this.seleccion.j + 2, b: o.t === 'rutaB' };
+        return null;
+    }
+
+    // Anota qué hace el equipo en ese punto y cuánto tiempo (en segundos de juego)
+    ponerPausa(nota, segundos) {
+        const sel = this.puntoPausa;
+        if (!sel) return false;
+        if (this._pausaEn !== sel.p) { this.instantanea(); this._pausaEn = sel.p; }
+        const p = sel.p;
+        const n = String(nota || '').trim().slice(0, 24);
+        const s = Math.max(0, Math.min(900, Math.round(Number(segundos) || 0)));
+        if (n) p.nota = n; else delete p.nota;
+        if (s) p.pausa = s; else delete p.pausa;
+        this.cambio();
+        return true;
+    }
+
+    // Intensidad de las zonas calientes nuevas y de la seleccionada
+    ponerCalor(nivel) {
+        this.estilo.calor = nivel;
+        const o = this.seleccion && this.seleccion.o;
+        if (o && o.t === 'caliente') { this.instantanea(); o.nivel = nivel; this.cambio(); }
     }
 
     // ---------- Medidas y transformación ----------
@@ -262,7 +310,7 @@ class Tablero {
         c.strokeRect(OX, OY, L, A);
 
         // Orden de capas: zonas debajo, marcas de equipos y jugadores encima
-        const orden = ['caliente', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'ruta', 'icono', 'logo', 'caida', 'jugador', 'texto'];
+        const orden = ['caliente', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'rutaB', 'ruta', 'medida', 'icono', 'logo', 'caida', 'jugador', 'texto'];
         const objs = [...this.doc.objetos].sort((a, b) => orden.indexOf(a.t) - orden.indexOf(b.t));
         objs.forEach(o => this._objeto(c, o, P, k));
 
@@ -297,6 +345,37 @@ class Tablero {
         c.fillText(this.modo === 'mapa' ? 'SUBE LA IMAGEN DEL MAPA EN EL PANEL' : 'SUBE UNA IMAGEN AÉREA EN EL PANEL', OX + L / 2, OY + A / 2 + L * 0.04);
     }
 
+    static textoPausa(p, resta) {
+        const s = resta !== undefined ? resta : p.pausa;
+        return ((p.nota || (p.pausa ? 'Pausa' : '')).toUpperCase() + (p.pausa ? ` · ${relojTxt(s)}` : '')).trim();
+    }
+
+    _cartel(c, texto, x, y, k, color, progreso = null) {
+        c.save();
+        c.globalAlpha = 1;
+        const t = Math.max(9, k * 9.5);
+        c.font = `800 ${t}px ${TB_FUENTE}`;
+        const w = c.measureText(texto).width + t * 1.6, h = t * 2;
+        const x0 = x - w / 2, y0 = y - h - t * 0.6;
+        c.shadowColor = 'rgba(0,0,0,0.7)'; c.shadowBlur = k * 6;
+        c.fillStyle = 'rgba(5, 5, 8, 0.92)';
+        c.beginPath();
+        c.moveTo(x0, y0); c.lineTo(x0 + w, y0); c.lineTo(x0 + w, y0 + h);
+        c.lineTo(x + t * 0.5, y0 + h); c.lineTo(x, y); c.lineTo(x - t * 0.5, y0 + h);
+        c.lineTo(x0, y0 + h); c.closePath();
+        c.fill();
+        c.shadowBlur = 0;
+        c.strokeStyle = color; c.lineWidth = Math.max(1.5, k * 1.6); c.stroke();
+        c.fillStyle = color; c.fillRect(x0, y0, Math.max(3, t * 0.3), h);
+        if (progreso !== null) {
+            c.fillStyle = color;
+            c.fillRect(x0, y0 + h - Math.max(2, t * 0.22), w * Math.max(0, Math.min(1, progreso)), Math.max(2, t * 0.22));
+        }
+        c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(texto, x + t * 0.15, y0 + h / 2 + 0.5);
+        c.restore();
+    }
+
     _etiqueta(c, texto, x, y, k, colorBorde) {
         const t = Math.max(9, k * 11);
         c.font = `700 ${t}px ${TB_FUENTE}`;
@@ -320,17 +399,51 @@ class Tablero {
         c.globalAlpha = op;
         switch (o.t) {
             case 'caliente': {
-                const p = P(o), r = o.r * k;
+                const p = P(o), r = o.r * k, cal = TB_CALOR[o.nivel || 2];
+                // Núcleo con degradado
                 const g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-                g.addColorStop(0, 'rgba(230, 70, 70, 0.45)');
-                g.addColorStop(0.65, 'rgba(230, 70, 70, 0.16)');
-                g.addColorStop(1, 'rgba(230, 70, 70, 0)');
+                g.addColorStop(0, `rgba(${cal.rgb}, 0.55)`);
+                g.addColorStop(0.55, `rgba(${cal.rgb}, 0.22)`);
+                g.addColorStop(1, `rgba(${cal.rgb}, 0.05)`);
                 c.fillStyle = g;
                 c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.fill();
-                c.strokeStyle = 'rgba(255, 110, 100, 0.6)';
-                c.lineWidth = 1.5;
-                c.setLineDash([5, 4]);
+                // Rayado diagonal dentro del círculo
+                c.save();
+                c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.clip();
+                c.globalAlpha = op * 0.28;
+                c.fillStyle = this._rayas(c, cal.color, k);
+                c.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+                c.restore();
+                // Borde firme y anillo interior punteado
+                c.strokeStyle = cal.color; c.lineWidth = Math.max(1.5, k * 2.4);
+                c.shadowColor = cal.color; c.shadowBlur = k * 8;
                 c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.stroke();
+                c.shadowBlur = 0;
+                c.setLineDash([k * 6, k * 5]); c.lineWidth = Math.max(1, k * 1.2);
+                c.beginPath(); c.arc(p.x, p.y, r * 0.6, 0, 7); c.stroke();
+                c.setLineDash([]);
+                // Insignia con fuego
+                const ri = Math.max(8, k * 11);
+                c.fillStyle = 'rgba(5, 5, 8, 0.9)';
+                c.beginPath(); c.arc(p.x, p.y, ri, 0, 7); c.fill();
+                c.strokeStyle = cal.color; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
+                this._icono(c, '',p.x, p.y, ri * 1.1, cal.color);
+                const metros = this.modo === 'mapa' ? ` · ${Math.round(o.r * metrosPorUnidad(this.mapaActual))} m` : '';
+                this._etiqueta(c, `ZONA CALIENTE · ${cal.n}${metros}`, p.x, p.y + r + Math.max(11, k * 13), k, cal.color);
+                break;
+            }
+            case 'medida': {
+                const a = P(o.a), b = P(o.b);
+                c.strokeStyle = '#ffffff'; c.fillStyle = '#ffffff';
+                c.lineWidth = Math.max(1.5, k * 2);
+                c.setLineDash([k * 8, k * 5]);
+                c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+                c.setLineDash([]);
+                // Topes perpendiculares en los extremos
+                const ang = Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2, tl = Math.max(5, k * 7);
+                [a, b].forEach(q => { c.beginPath(); c.moveTo(q.x - Math.cos(ang) * tl, q.y - Math.sin(ang) * tl); c.lineTo(q.x + Math.cos(ang) * tl, q.y + Math.sin(ang) * tl); c.stroke(); });
+                const m = Math.hypot(o.b.x - o.a.x, o.b.y - o.a.y) * metrosPorUnidad(this.mapaActual);
+                this._etiqueta(c, `${Math.round(m)} m · a pie ${relojTxt(m / TB_VEL_A_PIE)} · vehículo ${relojTxt(m / TB_VEL_VEHICULO)}`, (a.x + b.x) / 2, (a.y + b.y) / 2 - Math.max(12, k * 14), k, '#ffffff');
                 break;
             }
             case 'segura': {
@@ -342,8 +455,8 @@ class Tablero {
                 c.setLineDash([]);
                 c.fillStyle = 'rgba(255, 255, 255, 0.05)';
                 c.fill();
-                const fase = TB_ZONAS[o.n - 1];
-                const txt = `Z${o.n}` + (fase && this.modo === 'mapa' ? `  ${Math.round(diametroZona(o.n, this.mapaActual))} m  ${relojTxt(fase.fin)}` : '');
+                const fase = zonasDe(this.mapaActual)[o.n - 1];
+                const txt = `Z${o.n}` + (fase && this.modo === 'mapa' ? `  ⌀ ${fase.r * 2} m  cierra ${relojTxt(fase.fin)}` : '');
                 this._etiqueta(c, txt, p.x, p.y - r - Math.max(9, k * 11), k, '#00f0ff');
                 break;
             }
@@ -395,6 +508,17 @@ class Tablero {
                 c.beginPath(); c.arc(p.x, p.y, ro, 0, 7); c.fill();
                 c.strokeStyle = o.color; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
                 this._icono(c, TB_ICONOS.ojo.u, p.x, p.y, ro * 1.05, o.color);
+                if (o._barrido !== undefined && r > 4) {
+                    const f = o._barrido < 0.5 ? o._barrido * 2 : 2 - o._barrido * 2;
+                    const an = o.ang - med + med * 2 * f;
+                    c.strokeStyle = '#ffffff'; c.globalAlpha = op * 0.85;
+                    c.lineWidth = Math.max(1.5, k * 2.2);
+                    c.shadowColor = o.color; c.shadowBlur = k * 10;
+                    c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x + Math.cos(an) * r, p.y + Math.sin(an) * r); c.stroke();
+                    c.shadowBlur = 0; c.globalAlpha = op;
+                }
+                if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), p.x, p.y - ro - 2, k, o.color,
+                    o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
                 break;
             }
             case 'rect': {
@@ -450,28 +574,62 @@ class Tablero {
                 c.stroke();
                 break;
             }
-            case 'ruta': {
+            case 'ruta':
+            case 'rutaB': {
                 const eq = this.equipo(o.eq);
                 const caida = this.caidaDe(o.eq);
-                const camino = (caida ? [caida, ...o.pts] : o.pts).map(P);
+                const logico = caida ? [caida, ...o.pts] : o.pts;
+                const camino = logico.map(P);
                 if (!eq || camino.length < 2) break;
+                const esB = o.t === 'rutaB';
+                // Tramos que cruzan una zona caliente: halo rojo debajo
+                for (let i = 0; i < logico.length - 1; i++) {
+                    if (!this.calientesEnTramo(logico[i], logico[i + 1]).length) continue;
+                    c.strokeStyle = 'rgba(255, 59, 48, 0.55)'; c.lineWidth = Math.max(6, k * 11);
+                    c.beginPath(); c.moveTo(camino[i].x, camino[i].y); c.lineTo(camino[i + 1].x, camino[i + 1].y); c.stroke();
+                }
                 c.strokeStyle = c.fillStyle = eq.color;
-                c.lineWidth = Math.max(2, k * 4.5);
+                c.lineWidth = Math.max(esB ? 1.5 : 2, k * (esB ? 3 : 4.5));
+                if (esB) { c.globalAlpha = op * 0.8; c.setLineDash([k * 12, k * 8]); }
                 c.shadowColor = 'rgba(0,0,0,0.8)'; c.shadowBlur = k * 6;
                 c.beginPath(); c.moveTo(camino[0].x, camino[0].y);
                 camino.slice(1).forEach(p => c.lineTo(p.x, p.y));
                 c.stroke();
+                c.setLineDash([]);
                 c.shadowBlur = 0;
-                this._punta(c, camino[camino.length - 2], camino[camino.length - 1], Math.max(8, k * 13));
-                camino.slice(1, -1).forEach((p, i) => {
+                this._punta(c, camino[camino.length - 2], camino[camino.length - 1], Math.max(8, k * (esB ? 10 : 13)));
+                // Paradas con número (B1, B2… en la ruta B) y tiempo de llegada acumulado
+                const mpu = this.modo === 'mapa' ? metrosPorUnidad(this.mapaActual) : 0;
+                const velR = this.velocidadRuta || TB_VEL_A_PIE;
+                // Segundos de juego: viaje + pausas anotadas (la de la caída cuenta desde el inicio)
+                let reloj = caida && caida.pausa ? caida.pausa : 0;
+                camino.slice(1).forEach((p, i) => {
+                    reloj += Math.hypot(logico[i + 1].x - logico[i].x, logico[i + 1].y - logico[i].y) * mpu / velR;
+                    const acumulado = reloj * velR;
+                    const parada = logico[i + 1];
+                    if (parada.nota || parada.pausa) {
+                        this._cartel(c, Tablero.textoPausa(parada), p.x, p.y - Math.max(8, k * 10), k, eq.color);
+                        reloj += parada.pausa || 0;
+                    }
                     const r = Math.max(6, k * 8);
-                    c.fillStyle = '#050508';
-                    c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.fill();
-                    c.strokeStyle = eq.color; c.lineWidth = 2; c.stroke();
-                    c.fillStyle = '#ffffff';
-                    c.font = `700 ${Math.max(8, k * 9)}px ${TB_FUENTE}`;
-                    c.textAlign = 'center'; c.textBaseline = 'middle';
-                    c.fillText(String(i + 2), p.x, p.y + 0.5);
+                    if (i < camino.length - 2) {
+                        c.fillStyle = '#050508';
+                        c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.fill();
+                        c.strokeStyle = eq.color; c.lineWidth = 2; c.stroke();
+                        c.fillStyle = '#ffffff';
+                        c.font = `700 ${Math.max(8, k * 9)}px ${TB_FUENTE}`;
+                        c.textAlign = 'center'; c.textBaseline = 'middle';
+                        c.fillText(esB ? `B${i + 2}` : String(i + 2), p.x, p.y + 0.5);
+                    }
+                    if (mpu && !this._exportandoSinTiempos) {
+                        const t = relojTxt(acumulado / (this.velocidadRuta || TB_VEL_A_PIE));
+                        c.font = `700 ${Math.max(8, k * 8.5)}px ${TB_FUENTE}`;
+                        const w = c.measureText(t).width + 8;
+                        c.fillStyle = 'rgba(5, 5, 8, 0.85)';
+                        c.fillRect(p.x + r + 3, p.y - 8, w, 16);
+                        c.fillStyle = eq.color; c.textAlign = 'left'; c.textBaseline = 'middle';
+                        c.fillText(t, p.x + r + 7, p.y + 0.5);
+                    }
                 });
                 break;
             }
@@ -514,7 +672,16 @@ class Tablero {
                     c.textAlign = 'center'; c.textBaseline = 'middle';
                     c.fillText(iniciales(eq.nombre), p.x, p.y + 0.5);
                 }
-                this._etiqueta(c, eq.nombre.toUpperCase(), p.x, p.y + R + Math.max(10, k * 12), k, eq.color);
+                if (!o._movil) this._etiqueta(c, eq.nombre.toUpperCase(), p.x, p.y + R + Math.max(10, k * 12), k, eq.color);
+                if (o._pausa) {
+                    // Detenido en un punto: anillo que se vacía y cartel con la cuenta atrás
+                    const f = o._pausa.resta / o._pausa.total;
+                    c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(2, k * 3);
+                    c.beginPath(); c.arc(p.x, p.y, R + Math.max(4, k * 6), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); c.stroke();
+                    this._cartel(c, Tablero.textoPausa(o._pausa.p, o._pausa.resta), p.x, p.y - R - Math.max(6, k * 9), k, eq.color, f);
+                } else if (!o._movil && !o._sinCartel && (o.nota || o.pausa)) {
+                    this._cartel(c, Tablero.textoPausa(o), p.x, p.y - R - 2, k, eq.color);
+                }
                 if (eq.id === this.equipoSel && !this._exportando) {
                     c.strokeStyle = 'rgba(0, 240, 255, 0.9)';
                     c.lineWidth = 1.5;
@@ -601,7 +768,7 @@ class Tablero {
 
     _caja(o) {
         switch (o.t) {
-            case 'rect': case 'elipse': case 'linea': case 'flecha':
+            case 'rect': case 'elipse': case 'linea': case 'flecha': case 'medida':
                 return { x1: Math.min(o.a.x, o.b.x), y1: Math.min(o.a.y, o.b.y), x2: Math.max(o.a.x, o.b.x), y2: Math.max(o.a.y, o.b.y) };
             case 'trazo': {
                 const xs = o.pts.map(p => p.x), ys = o.pts.map(p => p.y);
@@ -630,6 +797,14 @@ class Tablero {
     }
 
     _marcoSeleccion(c, sel, P, k) {
+        if ((sel.o.t === 'ruta' || sel.o.t === 'rutaB') && sel.o.pts[sel.j]) {
+            const p = P(sel.o.pts[sel.j]);
+            c.save();
+            c.strokeStyle = '#00f0ff'; c.lineWidth = 1.5; c.setLineDash([4, 3]);
+            c.beginPath(); c.arc(p.x, p.y, Math.max(11, k * 13), 0, 7); c.stroke();
+            c.restore();
+            return;
+        }
         if (sel.o.t === 'vision') {
             c.save();
             [[Tablero.puntaCono(sel.o), '#00f0ff'], [Tablero.bordeCono(sel.o), '#f5c542']].forEach(([q, col]) => {
@@ -668,7 +843,7 @@ class Tablero {
             switch (o.t) {
                 case 'caida': if (cerca(o, 22 / this.k)) return { o }; break;
                 case 'jugador': case 'icono': if (cerca(o, 18 / this.k)) return { o }; break;
-                case 'ruta': {
+                case 'ruta': case 'rutaB': {
                     const j = o.pts.findIndex(p => cerca(p));
                     if (j >= 0) return { o, j };
                     break;
@@ -681,7 +856,7 @@ class Tablero {
                     if (Math.hypot(l.x - o.x, l.y - o.y) <= o.r && Math.abs(dif) <= o.ap * Math.PI / 360) return { o };
                     break;
                 }
-                case 'linea': case 'flecha': if (distSegmento(l, o.a, o.b) < tol) return { o }; break;
+                case 'linea': case 'flecha': case 'medida': if (distSegmento(l, o.a, o.b) < tol) return { o }; break;
                 case 'avion': if (o.a && o.b && distSegmento(l, o.a, o.b) < tol) return { o }; break;
                 case 'trazo':
                     for (let j = 0; j < o.pts.length - 1; j++) if (distSegmento(l, o.pts[j], o.pts[j + 1]) < tol) return { o };
@@ -743,7 +918,7 @@ class Tablero {
             const a = this.arrastre;
             this.arrastre = null;
             // Formas demasiado pequeñas: se descartan (fue un clic, no un trazo)
-            if (a.nuevo && ['rect', 'elipse', 'linea', 'flecha'].includes(a.nuevo.t)
+            if (a.nuevo && ['rect', 'elipse', 'linea', 'flecha', 'medida'].includes(a.nuevo.t)
                 && Math.hypot(a.nuevo.b.x - a.nuevo.a.x, a.nuevo.b.y - a.nuevo.a.y) < 6) {
                 this.doc.objetos = this.doc.objetos.filter(o => o !== a.nuevo);
                 this.historial.pop();
@@ -789,13 +964,14 @@ class Tablero {
                 if (m.o.eq && m.o.t === 'caida') this.seleccionarEquipo(m.o.eq);
             } else pan();
             this.dibujar();
+            this.alSeleccionar(m);
             return;
         }
         if (h === 'borrar') {
             const m = this.marcaEn(l);
             if (!m) return;
             this.instantanea();
-            if (m.o.t === 'ruta' && m.j !== undefined) {
+            if ((m.o.t === 'ruta' || m.o.t === 'rutaB') && m.j !== undefined) {
                 m.o.pts.splice(m.j, 1);
                 if (!m.o.pts.length) this.doc.objetos = this.doc.objetos.filter(o => o !== m.o);
             } else this.doc.objetos = this.doc.objetos.filter(o => o !== m.o);
@@ -815,34 +991,38 @@ class Tablero {
         };
         const { color, grosor, relleno } = this.estilo;
 
-        if (h === 'caida' || h === 'ruta') {
+        if (h === 'caida' || h === 'ruta' || h === 'rutaB') {
             const eq = this.equipo(this.equipoSel);
             if (!eq) return this.avisar('Primero elige o agrega un equipo en la lista');
             if (h === 'caida') {
                 this.instantanea();
-                const previa = this.caidaDe(eq.id);
-                if (previa) { previa.x = l.x; previa.y = l.y; }
-                else this.doc.objetos.push({ t: 'caida', eq: eq.id, x: l.x, y: l.y });
+                let caida = this.caidaDe(eq.id);
+                if (caida) { caida.x = l.x; caida.y = l.y; }
+                else this.doc.objetos.push(caida = { t: 'caida', eq: eq.id, x: l.x, y: l.y });
+                this.seleccion = { o: caida };
             } else {
                 if (!this.caidaDe(eq.id)) return this.avisar(`Marca antes la caída de ${eq.nombre}: la rotación sale de ahí`);
                 this.instantanea();
-                const ruta = this.rutaDe(eq.id);
+                let ruta = this.rutaDe(eq.id, h);
                 if (ruta) ruta.pts.push(l);
-                else this.doc.objetos.push({ t: 'ruta', eq: eq.id, pts: [l] });
+                else this.doc.objetos.push(ruta = { t: h, eq: eq.id, pts: [l] });
+                this.seleccion = { o: ruta, j: ruta.pts.length - 1 };
             }
             this.cambio();
+            this.alSeleccionar(this.seleccion);
             return;
         }
         if (h === 'caliente') {
-            const o = agregar({ t: 'caliente', x: l.x, y: l.y, r: 50 });
+            const o = agregar({ t: 'caliente', x: l.x, y: l.y, r: 50, nivel: this.estilo.calor || 2 });
             this.arrastre = { t: 'radio', o, min: 20 };
             this.dibujar();
             return;
         }
         if (h === 'segura') {
             const n = this.doc.objetos.filter(o => o.t === 'segura').length + 1;
-            if (n > 6) return this.avisar('Ya están las 6 fases de zona');
-            const r = Math.max(10, metrosAUnidades(diametroZona(n, this.mapaActual) / 2, this.mapaActual));
+            const fases = zonasDe(this.mapaActual);
+            if (n > fases.length) return this.avisar(`Ya están las ${fases.length} fases de zona de ${this.mapaActual}`);
+            const r = Math.max(4, metrosAUnidades(fases[n - 1].r, this.mapaActual));
             const o = agregar({ t: 'segura', n, x: l.x, y: l.y, r });
             this.arrastre = { t: 'radio', o, min: 8 };
             this.cambio();
@@ -891,6 +1071,11 @@ class Tablero {
             this.cambio();
             return;
         }
+        if (h === 'medir') {
+            const o = agregar({ t: 'medida', a: l, b: { ...l } });
+            this.arrastre = { t: 'forma', nuevo: o };
+            return;
+        }
         if (['rect', 'elipse', 'linea', 'flecha'].includes(h)) {
             const o = agregar({ t: h, a: l, b: { ...l }, color, grosor, relleno });
             this.arrastre = { t: 'forma', nuevo: o };
@@ -910,7 +1095,7 @@ class Tablero {
         } else if (a.t === 'mover') {
             const dx = l.x - a.ultimo.x, dy = l.y - a.ultimo.y;
             a.ultimo = l;
-            if (a.m.o.t === 'ruta' && a.m.j !== undefined) {
+            if ((a.m.o.t === 'ruta' || a.m.o.t === 'rutaB') && a.m.j !== undefined) {
                 a.m.o.pts[a.m.j].x += dx; a.m.o.pts[a.m.j].y += dy;
             } else desplazar(a.m.o, dx, dy);
         } else if (a.t === 'radio') {
@@ -940,7 +1125,9 @@ class Tablero {
         const o = this.marcaSeleccionada;
         if (!o) return false;
         this.instantanea();
-        this.doc.objetos = this.doc.objetos.filter(x => x !== o);
+        const j = this.seleccion.j;
+        if ((o.t === 'ruta' || o.t === 'rutaB') && j !== undefined && o.pts.length > 1) o.pts.splice(j, 1);
+        else this.doc.objetos = this.doc.objetos.filter(x => x !== o);
         this.seleccion = null;
         this.cambio();
         return true;
@@ -1004,6 +1191,187 @@ class Tablero {
 
     // ---------- Exportar ----------
     // Devuelve un canvas con el plano completo a la resolución pedida
+    // ---------- Video: las marcas aparecen en orden y cada equipo recorre su rotación ----------
+    // Devuelve la línea de tiempo (segundos de video) y una función que arma el documento de cada instante.
+    _guionVideo() {
+        const objs = this.doc.objetos;
+        const esRuta = o => o.t === 'ruta' || o.t === 'rutaB';
+        // Primero zonas y marcas generales, luego caídas; las rotaciones al final se animan aparte
+        const peso = o => o.t === 'caida' ? 1 : 0;
+        const apariciones = objs.filter(o => !esRuta(o) && !(o.t === 'vision' && this._visorDeRuta(o))).map((o, i) => ({ o, i })).sort((a, b) => peso(a.o) - peso(b.o) || a.i - b.i).map(x => x.o);
+        const INICIO = 0.8, FUNDIDO = 0.45;
+        const paso = apariciones.length ? Math.min(0.4, 7 / apariciones.length) : 0;
+        const entrada = new Map(apariciones.map((o, i) => [o, INICIO + i * paso]));
+        const finEntrada = INICIO + (apariciones.length ? (apariciones.length - 1) * paso + FUNDIDO : 0);
+
+        // Rotaciones en segundos de juego: pausa en la caída, viajes y pausas en cada parada
+        const mpu = this.modo === 'mapa' ? metrosPorUnidad(this.mapaActual) : 0;
+        const vel = this.velocidadRuta || TB_VEL_A_PIE;
+        const rutas = objs.filter(esRuta).map(o => {
+            const caida = this.caidaDe(o.eq);
+            const pts = caida ? [caida, ...o.pts] : o.pts;
+            const pasos = [];
+            if (caida && caida.pausa) pasos.push({ tipo: 'pausa', dur: caida.pausa, p: caida });
+            for (let i = 0; i < pts.length - 1; i++) {
+                const a = pts[i], b = pts[i + 1], L = Math.hypot(b.x - a.x, b.y - a.y);
+                if (L > 0) pasos.push({ tipo: 'viaje', dur: mpu ? L * mpu / vel : L / 40, a, b });
+                if (b.pausa) pasos.push({ tipo: 'pausa', dur: b.pausa, p: b });
+            }
+            return { o, caida, pts, pasos, real: pasos.reduce((s, p) => s + p.dur, 0) };
+        }).filter(r => r.pts.length > 1 && r.real > 0);
+        // Un visor junto a la caída o a una parada se abre cuando el equipo llega ahí
+        const llegadas = new Map();
+        rutas.forEach(r => {
+            let tr = 0;
+            const marcar = p => { if (!llegadas.has(p) || llegadas.get(p) > tr) llegadas.set(p, tr); };
+            marcar(r.pts[0]);
+            r.pasos.forEach(s => { tr += s.dur; if (s.tipo === 'viaje') marcar(s.b); });
+        });
+        const visores = new Map();
+        objs.filter(o => o.t === 'vision').forEach(v => {
+            let mejor = null;
+            llegadas.forEach((tr, p) => {
+                const d = Math.hypot(p.x - v.x, p.y - v.y);
+                if (d < 40 && (!mejor || d < mejor.d)) mejor = { d, tr };
+            });
+            if (mejor) visores.set(v, mejor.tr);
+        });
+        const maxReal = Math.max(1, ...rutas.map(r => r.real), ...[...visores].map(([v, tr]) => tr + (v.pausa || 0)));
+        const escala = Math.min(10 / maxReal, 1);   // la más larga dura ~10 s; nunca más lento que el juego
+        const finRutas = finEntrada + (rutas.length ? 0.4 + maxReal * escala : 0);
+        const total = finRutas + 2.5;
+        const t0r = finEntrada + 0.4;
+
+        // Dónde va el equipo a los `tr` segundos de juego
+        const avance = (r, tr) => {
+            const out = [r.pts[0]];
+            for (const s of r.pasos) {
+                if (s.tipo === 'pausa') {
+                    if (tr < s.dur) return { pts: out, cabeza: out[out.length - 1], pausa: { p: s.p, resta: s.dur - tr, total: s.dur } };
+                } else if (tr < s.dur) {
+                    const f = tr / s.dur;
+                    out.push({ x: s.a.x + (s.b.x - s.a.x) * f, y: s.a.y + (s.b.y - s.a.y) * f });
+                    return { pts: out, cabeza: out[out.length - 1] };
+                } else out.push(s.b);
+                tr -= s.dur;
+            }
+            return { pts: out, cabeza: out[out.length - 1], completa: true };
+        };
+
+        const estado = t => {
+            const lista = [];
+            const reloj = rutas.length && t >= t0r ? Math.min(t - t0r, maxReal * escala) / escala : null;
+            apariciones.forEach(o => {
+                const t0 = entrada.get(o);
+                if (t < t0) return;
+                const a = Math.min(1, (t - t0) / FUNDIDO);
+                if (o.t === 'vision') {
+                    // El visor se abre, barre su ángulo y cuenta su tiempo junto con la rotación
+                    const e = Math.min(1, (t - t0) / 0.9), suave = 1 - (1 - e) ** 3;
+                    const v = { ...o, r: o.r * suave, ap: Math.max(1, o.ap * suave), _barrido: ((t - t0) / 2.4) % 1 };
+                    if (o.pausa) {
+                        v._resta = Math.max(0, o.pausa - (reloj ?? 0));
+                        if (!v._resta) { v.op = (o.op ?? 1) * 0.35; delete v._barrido; }
+                    }
+                    lista.push(v);
+                    return;
+                }
+                if (o.t === 'caida' && rutas.some(r => r.caida === o)) {
+                    lista.push({ ...o, op: (o.op ?? 1) * a, _sinCartel: reloj !== null && reloj < (o.pausa || 0) });
+                    return;
+                }
+                lista.push(a >= 1 ? o : { ...o, op: (o.op ?? 1) * a });
+            });
+            // Visores ligados a un punto de la rotación
+            if (reloj !== null) visores.forEach((tr, o) => {
+                if (reloj < tr) return;
+                const e = Math.min(1, (reloj - tr) * escala / 0.9), suave = 1 - (1 - e) ** 3;
+                const v = { ...o, r: o.r * suave, ap: Math.max(1, o.ap * suave), _barrido: ((reloj - tr) * escala / 2.4) % 1 };
+                if (o.pausa) {
+                    v._resta = Math.max(0, o.pausa - (reloj - tr));
+                    if (!v._resta) { v.op = (o.op ?? 1) * 0.35; delete v._barrido; }
+                }
+                lista.unshift(v);
+            });
+            if (reloj !== null) rutas.forEach(r => {
+                const parte = avance(r, reloj);
+                // El punto donde está detenido no repite su cartel (lo lleva el escudo con la cuenta atrás)
+                const pts = (r.caida ? parte.pts.slice(1) : parte.pts).map(p => parte.pausa && p === parte.pausa.p ? { x: p.x, y: p.y } : p);
+                if (pts.length) lista.push({ ...r.o, pts });
+                if (!parte.completa && r.caida) lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _movil: true, _pausa: parte.pausa || null });
+            });
+            return { objetos: lista, reloj };
+        };
+        return { total, estado };
+    }
+
+    // ¿Este visor está junto a la caída o a una parada de alguna rotación?
+    _visorDeRuta(v) {
+        return this.doc.objetos.some(o => {
+            if (o.t !== 'ruta' && o.t !== 'rutaB') return false;
+            const caida = this.caidaDe(o.eq);
+            return [...(caida ? [caida] : []), ...o.pts].some(p => Math.hypot(p.x - v.x, p.y - v.y) < 40);
+        });
+    }
+
+    // Graba el video en el navegador (MP4 si lo soporta, si no WebM)
+    grabarVideo({ ancho = 1280, fps = 30, titulo = '', alProgreso = () => {} } = {}) {
+        if (typeof MediaRecorder === 'undefined') return Promise.reject(new Error('Este navegador no puede grabar video.'));
+        const cv = document.createElement('canvas');
+        cv.width = ancho - ancho % 2;
+        cv.height = Math.round(cv.width * this.doc.alto / TB_ANCHO / 2) * 2;
+        const c = cv.getContext('2d');
+        const k = cv.width / TB_ANCHO;
+        const tipos = ['video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+        const tipo = tipos.find(t => MediaRecorder.isTypeSupported(t));
+        if (!tipo) return Promise.reject(new Error('Este navegador no puede grabar video.'));
+        const { total, estado } = this._guionVideo();
+        const real = this.doc;
+
+        const cuadro = t => {
+            const e = estado(t);
+            this.doc = { ...real, objetos: e.objetos };
+            this._exportando = true;
+            try { this.dibujar(c, { k, W: cv.width, H: cv.height }); }
+            finally { this.doc = real; this._exportando = false; }
+            // Banda superior: título y reloj de la rotación
+            const h = Math.round(cv.height * 0.055);
+            c.fillStyle = 'rgba(5, 5, 8, 0.82)';
+            c.fillRect(0, 0, cv.width, h);
+            c.fillStyle = '#00f0ff'; c.fillRect(0, h - 2, cv.width, 2);
+            c.font = `700 ${Math.round(h * 0.42)}px ${TB_FUENTE}`;
+            c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = '#ffffff';
+            c.fillText(titulo, h * 0.4, h / 2);
+            if (e.reloj !== null) {
+                c.textAlign = 'right'; c.fillStyle = '#00f0ff';
+                c.fillText(`ROTACIÓN ${relojTxt(e.reloj)}`, cv.width - h * 0.4, h / 2);
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const flujo = cv.captureStream(fps);
+            const rec = new MediaRecorder(flujo, { mimeType: tipo, videoBitsPerSecond: 8e6 });
+            const trozos = [];
+            rec.ondataavailable = ev => { if (ev.data.size) trozos.push(ev.data); };
+            rec.onerror = ev => reject(ev.error || new Error('Falló la grabación'));
+            rec.onstop = () => {
+                flujo.getTracks().forEach(tr => tr.stop());
+                resolve({ blob: new Blob(trozos, { type: tipo.split(';')[0] }), ext: tipo.includes('mp4') ? 'mp4' : 'webm', segundos: total });
+            };
+            cuadro(0);
+            rec.start(250);
+            const inicio = performance.now();
+            const tic = () => {
+                const t = (performance.now() - inicio) / 1000;
+                cuadro(Math.min(t, total));
+                alProgreso(Math.min(1, t / total));
+                if (t >= total) return setTimeout(() => rec.stop(), 150);
+                setTimeout(tic, 1000 / fps);
+            };
+            setTimeout(tic, 1000 / fps);
+        });
+    }
+
     lienzoExportado(ancho = 1600) {
         const c = document.createElement('canvas');
         c.width = ancho;
@@ -1051,11 +1419,38 @@ function iniciales(n) {
 }
 
 // ---------- Datos de juego para el análisis ----------
-// Lado aproximado de cada mapa en metros (escala del plano 1000 × 1000)
-const TB_LADO_MAPA = { Bermuda: 2400, Purgatorio: 2800, Kalahari: 2000, Nexterra: 2400, Solara: 1400 };
+// Lado real de cada imagen de mapa en metros (calibrado con las posiciones de 240 replays)
+const TB_LADO_MAPA = { Bermuda: 1840, Purgatorio: 1827, Kalahari: 1420, Nexterra: 1269, Solara: 1496 };
 
-// Fases de zona medidas sobre un mapa de 2400 m; en otros mapas se escalan
-const TB_ZONAS = (() => {
+// Reglas de zona por mapa (FFWS, iguales en las 96 partidas oficiales revisadas):
+// por círculo [radio en m, espera en s, cierre en s]; el primero es el inicial.
+const TB_REGLAS_ZONA = {
+    Bermuda:    [[1000, 170, 240], [550, 40, 150], [300, 50, 90], [150, 50, 75], [75, 30, 60], [30, 30, 80], [30, 30, 120], [0, 0, 0]],
+    Purgatorio: [[1000, 170, 240], [550, 40, 150], [300, 50, 90], [150, 50, 75], [75, 30, 60], [30, 30, 80], [30, 30, 120], [0, 0, 0]],
+    Kalahari:   [[1000, 170, 240], [550, 40, 150], [300, 50, 90], [150, 50, 75], [75, 30, 60], [30, 30, 80], [30, 30, 120], [0, 0, 0]],
+    Nexterra:   [[700, 210, 200], [450, 40, 150], [225, 40, 110], [115, 40, 90], [45, 30, 90], [45, 30, 120], [0, 0, 0]],
+    Solara:     [[850, 190, 230], [500, 60, 115], [250, 50, 110], [125, 30, 105], [45, 30, 120], [45, 30, 120], [0, 0, 0]]
+};
+const TB_DANO_ZONA = [1, 2, 4, 7, 10, 15, 20];
+
+// Fases de zona de un mapa, con tiempos desde que despega el avión.
+// La fase 1 se anuncia ~50 s después del despegue; cada fase se anuncia al cerrar la anterior.
+function zonasDe(mapa) {
+    const reglas = TB_REGLAS_ZONA[mapa] || TB_REGLAS_ZONA.Bermuda;
+    const fases = [];
+    let anuncio = 50;
+    for (let i = 1; i < reglas.length; i++) {
+        const [, espera, cierre] = reglas[i - 1];
+        const esperaReal = i === 1 ? espera - 50 : espera;
+        const ini = anuncio + esperaReal, fin = ini + cierre;
+        fases.push({ n: i, r: reglas[i][0], anuncio, espera: esperaReal, cierre, ini, fin, dano: TB_DANO_ZONA[i - 1] || 20 });
+        anuncio = fin;
+    }
+    return fases;
+}
+
+// Compatibilidad: fases genéricas (Bermuda) para quien todavía use TB_ZONAS
+const TB_ZONAS_ANTIGUAS = (() => {
     const fases = [
         { diam: 1400, espera: 255, cierre: 120, dano: 1 },
         { diam: 900, espera: 140, cierre: 90, dano: 2 },
@@ -1074,9 +1469,10 @@ const TB_ZONAS = (() => {
 
 function metrosPorUnidad(mapa) { return (TB_LADO_MAPA[mapa] || 2400) / TB_ANCHO; }
 function metrosAUnidades(m, mapa) { return m / metrosPorUnidad(mapa); }
+const TB_ZONAS = zonasDe('Bermuda');
 function diametroZona(n, mapa) {
-    const z = TB_ZONAS[n - 1];
-    return z ? z.diam * (TB_LADO_MAPA[mapa] || 2400) / 2400 : 0;
+    const z = zonasDe(mapa)[n - 1];
+    return z ? z.r * 2 : 0;
 }
 function relojTxt(seg) {
     seg = Math.max(0, Math.round(seg));

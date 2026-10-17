@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/moderno.css?v=19">
+    <link rel="stylesheet" href="css/moderno.css?v=22">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -249,6 +249,39 @@
                     </label>
                     <p class="ayuda">Con Mover, toca un cono para ajustarlo: tirador azul = dirección y alcance, amarillo = apertura.</p>
                 </div>
+                <div id="tb-opc-pausa" class="tb-pausa" hidden>
+                    <h3 style="margin-top:10px"><i class="fa-solid fa-hourglass-half"></i> <span id="tb-pausa-titulo">Pausa</span></h3>
+                    <div class="tb-pausa-acciones">
+                        <button type="button" onclick="accionPausa('Explorar')">Explorar</button>
+                        <button type="button" onclick="accionPausa('Lootear')">Lootear</button>
+                        <button type="button" onclick="accionPausa('Esperar zona')">Esperar zona</button>
+                        <button type="button" onclick="accionPausa('Curarse')">Curarse</button>
+                        <button type="button" onclick="accionPausa('Vigilar')">Vigilar</button>
+                        <button type="button" onclick="accionPausa('Buscar vehículo')">Vehículo</button>
+                        <button type="button" onclick="accionPausa('Tomar casa')">Tomar casa</button>
+                        <button type="button" onclick="accionPausa('Pelear')">Pelear</button>
+                    </div>
+                    <div class="tb-pausa-campos">
+                        <input id="tb-pausa-nota" maxlength="24" placeholder="Qué hacen aquí" aria-label="Qué hace el equipo en este punto" oninput="ponerPausaTablero()">
+                        <input id="tb-pausa-seg" type="number" min="0" max="900" step="5" placeholder="seg" aria-label="Segundos de pausa" oninput="ponerPausaTablero()">
+                    </div>
+                    <div class="tb-pausa-acciones">
+                        <button type="button" onclick="sumarPausa(10)">+10 s</button>
+                        <button type="button" onclick="sumarPausa(30)">+30 s</button>
+                        <button type="button" onclick="sumarPausa(60)">+1 min</button>
+                        <button type="button" onclick="quitarPausa()"><i class="fa-solid fa-xmark"></i> Quitar</button>
+                    </div>
+                    <p class="ayuda">El cartel sale en el mapa y en el video el equipo se detiene ese tiempo. Los tiempos de llegada de las paradas siguientes ya lo suman.</p>
+                </div>
+                <div id="tb-opc-calor" hidden>
+                    <h3 style="margin-top:10px">Intensidad de la zona caliente</h3>
+                    <div id="tb-calor" class="tb-calor">
+                        <button type="button" data-n="1" style="--c:#f5c542" onclick="ponerCalor(1)"><i class="fa-solid fa-fire"></i> Baja</button>
+                        <button type="button" data-n="2" style="--c:#ff8a3d" class="activo" onclick="ponerCalor(2)"><i class="fa-solid fa-fire"></i> Media</button>
+                        <button type="button" data-n="3" style="--c:#ff3b30" onclick="ponerCalor(3)"><i class="fa-solid fa-fire"></i> Alta</button>
+                    </div>
+                    <p class="ayuda">Con Mover, toca una zona caliente para cambiar su intensidad.</p>
+                </div>
                 <div id="tb-opc-icono" hidden>
                     <h3 style="margin-top:10px">Íconos</h3>
                     <div id="tb-iconos" class="tb-iconos"></div>
@@ -269,6 +302,10 @@
                 <form class="tb-rival" onsubmit="agregarRival(event)">
                     <input name="nombre" placeholder="Equipo rival" maxlength="22" aria-label="Nombre del equipo rival">
                     <input name="color" type="color" value="#e66767" aria-label="Color del rival">
+                    <label id="tb-rival-logo" class="btn-sec tb-rival-logo" title="Ícono del equipo (opcional)">
+                        <i class="fa-solid fa-image"></i>
+                        <input name="logo" type="file" accept="image/*" hidden onchange="this.parentElement.classList.toggle('listo', !!this.files.length)">
+                    </label>
                     <button type="submit" class="btn-sec" aria-label="Agregar rival"><i class="fa-solid fa-plus"></i></button>
                 </form>
                 <div id="tb-equipos" class="tb-equipos"></div>
@@ -286,6 +323,7 @@
                 <button type="button" class="btn-generar" onclick="guardarTablero()"><i class="fa-solid fa-box-archive"></i> GUARDAR EN LA REPISA</button>
                 <div class="tb-fila-botones">
                     <button type="button" class="btn-sec" onclick="descargarTablero()"><i class="fa-solid fa-download"></i> PNG</button>
+                    <button type="button" class="btn-sec" onclick="descargarVideoTablero(this)" title="Video: las marcas aparecen en orden y cada equipo recorre su rotación"><i class="fa-solid fa-film"></i> Video</button>
                     <button type="button" class="btn-sec" onclick="nuevoTablero()"><i class="fa-solid fa-file"></i> Nuevo</button>
                     <button type="button" class="btn-sec btn-peligro" onclick="limpiarTablero()"><i class="fa-solid fa-eraser"></i> Limpiar</button>
                 </div>
@@ -795,8 +833,8 @@
 <script src="js/db.js?v=14"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=14"></script>
-<script src="js/estrategia.js?v=16"></script>
+<script src="js/tablero.js?v=19"></script>
+<script src="js/estrategia.js?v=19"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=18"></script>
