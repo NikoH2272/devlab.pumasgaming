@@ -323,7 +323,8 @@
                 <button type="button" class="btn-generar" onclick="guardarTablero()"><i class="fa-solid fa-box-archive"></i> GUARDAR EN LA REPISA</button>
                 <div class="tb-fila-botones">
                     <button type="button" class="btn-sec" onclick="descargarTablero()"><i class="fa-solid fa-download"></i> PNG</button>
-                    <button type="button" class="btn-sec" onclick="descargarVideoTablero(this)" title="Video: las marcas aparecen en orden y cada equipo recorre su rotación"><i class="fa-solid fa-film"></i> Video</button>
+                    <button type="button" class="btn-sec" onclick="descargarVideoTablero(this, false)" title="Video liviano (1080 px, 30 fps) para mandar por WhatsApp"><i class="fa-brands fa-whatsapp"></i> Video</button>
+                    <button type="button" class="btn-sec" onclick="descargarVideoTablero(this, true)" title="Video en máxima calidad (1920 px, 60 fps), más pesado"><i class="fa-solid fa-film"></i> Video HD</button>
                     <button type="button" class="btn-sec" onclick="nuevoTablero()"><i class="fa-solid fa-file"></i> Nuevo</button>
                     <button type="button" class="btn-sec btn-peligro" onclick="limpiarTablero()"><i class="fa-solid fa-eraser"></i> Limpiar</button>
                 </div>
@@ -833,8 +834,8 @@
 <script src="js/db.js?v=14"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=19"></script>
-<script src="js/estrategia.js?v=19"></script>
+<script src="js/tablero.js?v=32"></script>
+<script src="js/estrategia.js?v=23"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=18"></script>

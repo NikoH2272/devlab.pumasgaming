@@ -151,7 +151,7 @@ function sincronizarPausa() {
     const sel = tablero && tablero.puntoPausa;
     caja.hidden = !sel;
     if (!sel) return;
-    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'En este visor' : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
+    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'En este visor' : sel.tipo === 'binoculares' ? 'En los binoculares' : sel.tipo === 'reposicion' ? 'En la reposición' : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
     $('#tb-pausa-titulo').textContent = titulo;
     // No pisar lo que el usuario está escribiendo
     if (document.activeElement !== $('#tb-pausa-nota')) $('#tb-pausa-nota').value = sel.p.nota || '';
@@ -485,10 +485,26 @@ async function guardarTablero() {
     } catch (err) { toast(err.message, 'error'); }
 }
 
-function descargarTablero() {
-    const c = tablero.lienzoExportado(1600);
-    const nombre = ($('#tb-nombre').value.trim() || (tbActual.tipo === 'mapa' ? tablero.mapaActual : 'vista-aerea'))
-        .toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '-');
+// Título de las descargas: roster · mapa (· nombre del plano)
+function partesDescarga() {
+    const sel = $('#tb-roster');
+    const propio = tablero.equipo(tablero.equipoSel);
+    const roster = sel.value ? sel.options[sel.selectedIndex].text : propio && propio.propio ? propio.nombre : '';
+    const mapa = tbActual.tipo === 'mapa' ? tablero.mapaActual : 'Vista aérea';
+    return [roster, mapa, $('#tb-nombre').value.trim()].filter(Boolean);
+}
+
+function tituloDescarga() {
+    return partesDescarga().join(' · ').toUpperCase();
+}
+
+function archivoDescarga() {
+    return partesDescarga().join('-').toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '-').replace(/^-|-$/g, '');
+}
+
+async function descargarTablero() {
+    const c = await tablero.lienzoDescarga(1600, tituloDescarga());
+    const nombre = archivoDescarga();
     c.toBlob(b => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(b);
@@ -500,28 +516,29 @@ function descargarTablero() {
 }
 
 let tbGrabando = false;
-async function descargarVideoTablero(btn) {
+async function descargarVideoTablero(btn, hd = false) {
     if (tbGrabando) return;
     if (!tablero.doc.objetos.length) return toast('El plano está vacío: no hay nada que animar.', 'error');
     tbGrabando = true;
     const html = btn.innerHTML;
     btn.disabled = true;
-    const nombrePlano = $('#tb-nombre').value.trim();
-    const titulo = `PUMAS GAMING · ${tbActual.tipo === 'mapa' ? tablero.mapaActual.toUpperCase() : 'VISTA AÉREA'}${nombrePlano ? ' · ' + nombrePlano.toUpperCase() : ''}`;
+    const titulo = tituloDescarga();
     toast('Grabando el video… deja esta pestaña abierta y a la vista.');
     try {
         const { blob, ext } = await tablero.grabarVideo({
-            titulo,
+            hd, titulo,
             alProgreso: f => { btn.innerHTML = `<i class="fa-solid fa-circle" style="color:#ff3b30"></i> ${Math.round(f * 100)}%`; }
         });
-        const nombre = (nombrePlano || (tbActual.tipo === 'mapa' ? tablero.mapaActual : 'vista-aerea')).toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '-');
+        const nombre = archivoDescarga();
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `pumas-${nombre}-${fechaLocal(new Date())}.${ext}`;
+        a.download = `pumas-${nombre}-${fechaLocal(new Date())}${hd ? '-hd' : ''}.${ext}`;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
-        toast(`Video listo (${ext.toUpperCase()}).`);
+
+        if (ext === 'mp4') toast(`Video${hd ? ' HD' : ''} listo (${(blob.size / 1048576).toFixed(1)} MB).`);
+        else toast('Tu navegador grabó en WebM: WhatsApp no lo reproduce. Usa Chrome o Edge actualizados para MP4.', 'error');
     } catch (err) {
         toast(err.message, 'error');
     } finally {

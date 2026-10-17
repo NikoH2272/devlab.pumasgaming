@@ -23,6 +23,8 @@
 const TB_ANCHO = 1000;
 const TB_FUENTE = "'Orbitron', sans-serif";
 const TB_FA = '"Font Awesome 6 Free"';
+// Marca de agua de las descargas (PNG y video)
+const TB_CREADOR = { usuario: '@coach.nikoh', url: 'https://www.instagram.com/coach.nikoh/' };
 
 const TB_HERRAMIENTAS = {
     mover:    { n: 'Mover',         i: 'fa-up-down-left-right', pista: 'Arrastra una marca para moverla · doble clic en un texto para editarlo · arrastra el fondo para desplazarte' },
@@ -30,6 +32,8 @@ const TB_HERRAMIENTAS = {
     ruta:     { n: 'Rotación',      i: 'fa-route',         mapa: true, pista: 'La rotación sale de la caída del equipo · toca las paradas en orden · cada parada muestra el tiempo de llegada' },
     rutaB:    { n: 'Ruta B',        i: 'fa-code-branch',   mapa: true, pista: 'Rotación alterna (plan B) del equipo elegido · sale de la caída, igual que la principal' },
     medir:    { n: 'Medir',         i: 'fa-ruler',         mapa: true, pista: 'Arrastra entre dos puntos: distancia real y tiempo a pie y en vehículo' },
+    reposicion: { n: 'Reposición', i: 'fa-feather', pista: 'Punto de reposición (verde, alas de ángel) del tamaño de la caída · con Mover anota el tiempo' },
+    binoculares: { n: 'Binoculares', i: 'fa-binoculars', pista: 'Zona amarilla donde los binoculares revelan enemigos (del tamaño de la caída) · con Mover anota el tiempo' },
     caliente: { n: 'Zona caliente', i: 'fa-fire',          pista: 'Toca y arrastra el radio de una zona disputada · elige la intensidad en el panel' },
     segura:   { n: 'Zona segura',   i: 'fa-circle-dot',    mapa: true, pista: 'Marca las fases de zona en orden (máx. 6) · el radio sale de la medida real' },
     avion:    { n: 'Avión',         i: 'fa-plane',         mapa: true, pista: 'Toca la entrada del avión y luego la salida' },
@@ -68,6 +72,12 @@ const TB_ICONOS = {
 // Marcas que admiten línea punteada / que no se copian ni restilizan
 const TB_CON_LINEA = ['rect', 'elipse', 'linea', 'flecha', 'trazo'];
 const TB_NO_COPIABLES = ['caida', 'ruta', 'rutaB', 'segura', 'avion'];
+
+// Puntos del tamaño de la caída con color fijo
+const TB_PUNTOS = {
+    binoculares: { col: '#f5c542', rgb: '245, 197, 66', glifo: '', n: 'BINOCULARES', ley: 'Binoculares · revelan enemigos' },
+    reposicion:  { col: '#4ade80', rgb: '74, 222, 128', alas: true, n: 'REPOSICIÓN', ley: 'Punto de reposición' }
+};
 
 // Zona caliente: intensidad 1 baja · 2 media · 3 alta
 const TB_CALOR = {
@@ -224,7 +234,7 @@ class Tablero {
     get puntoPausa() {
         const o = this.marcaSeleccionada;
         if (!o) return null;
-        if (o.t === 'caida' || o.t === 'vision') return { p: o, tipo: o.t };
+        if (o.t === 'caida' || o.t === 'vision' || TB_PUNTOS[o.t]) return { p: o, tipo: o.t };
         if ((o.t === 'ruta' || o.t === 'rutaB') && o.pts[this.seleccion.j]) return { p: o.pts[this.seleccion.j], tipo: 'parada', n: this.seleccion.j + 2, b: o.t === 'rutaB' };
         return null;
     }
@@ -291,8 +301,8 @@ class Tablero {
     dibujar(ctx, exportar) {
         const c = ctx || this.cx;
         const k = exportar ? exportar.k : this.k;
-        const OX = exportar ? 0 : this.ox;
-        const OY = exportar ? 0 : this.oy;
+        const OX = exportar ? (exportar.ox || 0) : this.ox;
+        const OY = exportar ? (exportar.oy || 0) : this.oy;
         const W = exportar ? exportar.W : this.W;
         const H = exportar ? exportar.H : this.H;
         if (!W || !H) return;
@@ -303,14 +313,14 @@ class Tablero {
         c.fillStyle = '#050508';
         c.fillRect(0, 0, W, H);
 
-        if (this.fondo) c.drawImage(this.fondo, OX, OY, L, A);
+        if (this.fondo) { c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(this.fondo, OX, OY, L, A); }
         else this._cuadricula(c, OX, OY, L, A);
         c.strokeStyle = 'rgba(0, 240, 255, 0.35)';
         c.lineWidth = 1;
         c.strokeRect(OX, OY, L, A);
 
         // Orden de capas: zonas debajo, marcas de equipos y jugadores encima
-        const orden = ['caliente', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'rutaB', 'ruta', 'medida', 'icono', 'logo', 'caida', 'jugador', 'texto'];
+        const orden = ['caliente', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'rutaB', 'ruta', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'jugador', 'texto'];
         const objs = [...this.doc.objetos].sort((a, b) => orden.indexOf(a.t) - orden.indexOf(b.t));
         objs.forEach(o => this._objeto(c, o, P, k));
 
@@ -690,6 +700,37 @@ class Tablero {
                 }
                 break;
             }
+            case 'binoculares':
+            case 'reposicion': {
+                // Binoculares: círculo amarillo donde se revelan enemigos · Reposición: círculo verde con alas de ángel
+                const tipo = TB_PUNTOS[o.t];
+                const p = P(o), R = Math.max(13, k * 20), col = tipo.col;
+                c.fillStyle = `rgba(${tipo.rgb}, 0.38)`;
+                c.beginPath(); c.arc(p.x, p.y, R, 0, 7); c.fill();
+                c.strokeStyle = col; c.lineWidth = Math.max(2, k * 3);
+                c.shadowColor = col; c.shadowBlur = k * 8;
+                c.stroke();
+                c.shadowBlur = 0;
+                // Pulso de radar en el video
+                if (o._pulso !== undefined) {
+                    c.globalAlpha = op * (1 - o._pulso);
+                    c.lineWidth = Math.max(1.5, k * 2);
+                    c.beginPath(); c.arc(p.x, p.y, R * (0.3 + o._pulso * 0.7), 0, 7); c.stroke();
+                    c.globalAlpha = op;
+                }
+                c.fillStyle = 'rgba(5, 5, 8, 0.85)';
+                c.beginPath(); c.arc(p.x, p.y, R * (tipo.alas ? 0.62 : 0.42), 0, 7); c.fill();
+                if (tipo.alas) this._alas(c, p.x, p.y + R * 0.08, R * 0.46, col);
+                else this._icono(c, tipo.glifo, p.x, p.y, R * 0.48, col);
+                if (o._resta !== undefined && o.pausa) {
+                    c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(2, k * 3);
+                    c.beginPath(); c.arc(p.x, p.y, R + Math.max(4, k * 6), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (o._resta / o.pausa)); c.stroke();
+                }
+                this._etiqueta(c, tipo.n, p.x, p.y + R + Math.max(10, k * 12), k, col);
+                if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), p.x, p.y - R - 2, k, col,
+                    o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
+                break;
+            }
             case 'jugador': {
                 const p = P(o), r = Math.max(9, k * 12);
                 c.fillStyle = o.color || '#00f0ff';
@@ -754,6 +795,27 @@ class Tablero {
         c.fill();
     }
 
+    // Alas de ángel con aureola (centro del punto de reposición); s = media anchura
+    _alas(c, x, y, s, color) {
+        c.save();
+        c.fillStyle = color;
+        [-1, 1].forEach(d => {
+            c.beginPath();
+            c.moveTo(x + d * s * 0.1, y + s * 0.25);
+            c.bezierCurveTo(x + d * s * 0.2, y - s * 0.55, x + d * s * 0.75, y - s * 0.75, x + d * s * 1.15, y - s * 0.6);
+            // Borde inferior con tres plumas
+            c.quadraticCurveTo(x + d * s * 1.05, y - s * 0.2, x + d * s * 0.95, y - s * 0.12);
+            c.quadraticCurveTo(x + d * s * 0.95, y + s * 0.15, x + d * s * 0.7, y + s * 0.18);
+            c.quadraticCurveTo(x + d * s * 0.62, y + s * 0.45, x + d * s * 0.42, y + s * 0.42);
+            c.quadraticCurveTo(x + d * s * 0.3, y + s * 0.6, x + d * s * 0.1, y + s * 0.25);
+            c.fill();
+        });
+        // Aureola
+        c.strokeStyle = color; c.lineWidth = Math.max(1, s * 0.14);
+        c.beginPath(); c.ellipse(x, y - s * 0.62, s * 0.3, s * 0.1, 0, 0, 7); c.stroke();
+        c.restore();
+    }
+
     _icono(c, glifo, x, y, tam, color, giro = 0) {
         c.save();
         c.translate(x, y);
@@ -782,6 +844,7 @@ class Tablero {
             }
             case 'caliente': case 'segura': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
             case 'vision': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
+            case 'binoculares': case 'reposicion': return { x1: o.x - 20, y1: o.y - 20, x2: o.x + 20, y2: o.y + 20 };
             default: {
                 const r = o.t === 'icono' ? (o.s || 14) : 16;
                 return o.x !== undefined ? { x1: o.x - r, y1: o.y - r, x2: o.x + r, y2: o.y + r } : null;
@@ -841,7 +904,7 @@ class Tablero {
         for (let i = this.doc.objetos.length - 1; i >= 0; i--) {
             const o = this.doc.objetos[i];
             switch (o.t) {
-                case 'caida': if (cerca(o, 22 / this.k)) return { o }; break;
+                case 'caida': case 'binoculares': case 'reposicion': if (cerca(o, 22 / this.k)) return { o }; break;
                 case 'jugador': case 'icono': if (cerca(o, 18 / this.k)) return { o }; break;
                 case 'ruta': case 'rutaB': {
                     const j = o.pts.findIndex(p => cerca(p));
@@ -1044,6 +1107,13 @@ class Tablero {
             this.dibujar();
             return;
         }
+        if (TB_PUNTOS[h]) {
+            const o = agregar({ t: h, x: l.x, y: l.y });
+            this.seleccion = { o };
+            this.cambio();
+            this.alSeleccionar(this.seleccion);
+            return;
+        }
         if (h === 'jugador') {
             const n = this.doc.objetos.filter(o => o.t === 'jugador').length + 1;
             if (this.modo === 'mapa' && n > 4) return this.avisar('Ya están tus 4 jugadores. Usa Mover o Borrar.');
@@ -1198,7 +1268,7 @@ class Tablero {
         const esRuta = o => o.t === 'ruta' || o.t === 'rutaB';
         // Primero zonas y marcas generales, luego caídas; las rotaciones al final se animan aparte
         const peso = o => o.t === 'caida' ? 1 : 0;
-        const apariciones = objs.filter(o => !esRuta(o) && !(o.t === 'vision' && this._visorDeRuta(o))).map((o, i) => ({ o, i })).sort((a, b) => peso(a.o) - peso(b.o) || a.i - b.i).map(x => x.o);
+        const apariciones = objs.filter(o => !esRuta(o) && !((o.t === 'vision' || TB_PUNTOS[o.t]) && this._visorDeRuta(o))).map((o, i) => ({ o, i })).sort((a, b) => peso(a.o) - peso(b.o) || a.i - b.i).map(x => x.o);
         const INICIO = 0.8, FUNDIDO = 0.45;
         const paso = apariciones.length ? Math.min(0.4, 7 / apariciones.length) : 0;
         const entrada = new Map(apariciones.map((o, i) => [o, INICIO + i * paso]));
@@ -1228,7 +1298,7 @@ class Tablero {
             r.pasos.forEach(s => { tr += s.dur; if (s.tipo === 'viaje') marcar(s.b); });
         });
         const visores = new Map();
-        objs.filter(o => o.t === 'vision').forEach(v => {
+        objs.filter(o => o.t === 'vision' || TB_PUNTOS[o.t]).forEach(v => {
             let mejor = null;
             llegadas.forEach((tr, p) => {
                 const d = Math.hypot(p.x - v.x, p.y - v.y);
@@ -1239,7 +1309,9 @@ class Tablero {
         const maxReal = Math.max(1, ...rutas.map(r => r.real), ...[...visores].map(([v, tr]) => tr + (v.pausa || 0)));
         const escala = Math.min(10 / maxReal, 1);   // la más larga dura ~10 s; nunca más lento que el juego
         const finRutas = finEntrada + (rutas.length ? 0.4 + maxReal * escala : 0);
-        const total = finRutas + 2.5;
+        // Al final: la cámara vuelve a todo el mapa (1.4 s) y después sale el cartel de cierre
+        const total = finRutas + (rutas.length ? 6.5 : 2.5);
+        const tiempos = rutas.map(r => ({ eq: r.o.eq, b: r.o.t === 'rutaB', real: r.real }));
         const t0r = finEntrada + 0.4;
 
         // Dónde va el equipo a los `tr` segundos de juego
@@ -1259,7 +1331,7 @@ class Tablero {
         };
 
         const estado = t => {
-            const lista = [];
+            const lista = [], cabezas = [];
             const reloj = rutas.length && t >= t0r ? Math.min(t - t0r, maxReal * escala) / escala : null;
             apariciones.forEach(o => {
                 const t0 = entrada.get(o);
@@ -1276,6 +1348,11 @@ class Tablero {
                     lista.push(v);
                     return;
                 }
+                if (TB_PUNTOS[o.t] && o.pausa) {
+                    const restaB = Math.max(0, o.pausa - (reloj ?? 0));
+                    lista.push({ ...o, op: (o.op ?? 1) * a * (restaB ? 1 : 0.45), _resta: restaB, ...(restaB ? { _pulso: ((t - t0) / 1.4) % 1 } : {}) });
+                    return;
+                }
                 if (o.t === 'caida' && rutas.some(r => r.caida === o)) {
                     lista.push({ ...o, op: (o.op ?? 1) * a, _sinCartel: reloj !== null && reloj < (o.pausa || 0) });
                     return;
@@ -1286,7 +1363,8 @@ class Tablero {
             if (reloj !== null) visores.forEach((tr, o) => {
                 if (reloj < tr) return;
                 const e = Math.min(1, (reloj - tr) * escala / 0.9), suave = 1 - (1 - e) ** 3;
-                const v = { ...o, r: o.r * suave, ap: Math.max(1, o.ap * suave), _barrido: ((reloj - tr) * escala / 2.4) % 1 };
+                const v = TB_PUNTOS[o.t] ? { ...o, op: (o.op ?? 1) * suave, _pulso: ((reloj - tr) * escala / 1.4) % 1 }
+                    : { ...o, r: o.r * suave, ap: Math.max(1, o.ap * suave), _barrido: ((reloj - tr) * escala / 2.4) % 1 };
                 if (o.pausa) {
                     v._resta = Math.max(0, o.pausa - (reloj - tr));
                     if (!v._resta) { v.op = (o.op ?? 1) * 0.35; delete v._barrido; }
@@ -1298,11 +1376,12 @@ class Tablero {
                 // El punto donde está detenido no repite su cartel (lo lleva el escudo con la cuenta atrás)
                 const pts = (r.caida ? parte.pts.slice(1) : parte.pts).map(p => parte.pausa && p === parte.pausa.p ? { x: p.x, y: p.y } : p);
                 if (pts.length) lista.push({ ...r.o, pts });
+                if (!parte.completa) cabezas.push(parte.cabeza);
                 if (!parte.completa && r.caida) lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _movil: true, _pausa: parte.pausa || null });
             });
-            return { objetos: lista, reloj };
+            return { objetos: lista, reloj, cabezas };
         };
-        return { total, estado };
+        return { total, estado, finRutas, tiempos };
     }
 
     // ¿Este visor está junto a la caída o a una parada de alguna rotación?
@@ -1315,42 +1394,78 @@ class Tablero {
     }
 
     // Graba el video en el navegador (MP4 si lo soporta, si no WebM)
-    grabarVideo({ ancho = 1280, fps = 30, titulo = '', alProgreso = () => {} } = {}) {
+    // hd = false → 1080 px, 30 fps, ~4 Mbps: liviano y compatible con WhatsApp
+    // hd = true  → 1920 px, 60 fps, alta tasa: máxima calidad
+    grabarVideo({ hd = false, titulo = '', alProgreso = () => {} } = {}) {
+        const ancho = hd ? 1920 : 1080, fps = hd ? 60 : 30;
         if (typeof MediaRecorder === 'undefined') return Promise.reject(new Error('Este navegador no puede grabar video.'));
         const cv = document.createElement('canvas');
         cv.width = ancho - ancho % 2;
         cv.height = Math.round(cv.width * this.doc.alto / TB_ANCHO / 2) * 2;
         const c = cv.getContext('2d');
         const k = cv.width / TB_ANCHO;
-        const tipos = ['video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+        // Full HD a 60 fps: H.264 High (nivel 5.1) si el navegador lo tiene; si no, el siguiente que pueda
+        const tipos = hd
+            ? ['video/mp4;codecs=avc1.640033', 'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+            : ['video/mp4;codecs=avc1.4D4028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
         const tipo = tipos.find(t => MediaRecorder.isTypeSupported(t));
         if (!tipo) return Promise.reject(new Error('Este navegador no puede grabar video.'));
-        const { total, estado } = this._guionVideo();
+        const { total, estado, finRutas, tiempos } = this._guionVideo();
+        const lugar = this.modo === 'mapa' ? this.mapaActual.toUpperCase() : 'VISTA AÉREA';
+        const leyenda = Object.keys(TB_PUNTOS).filter(t => this.doc.objetos.some(o => o.t === t));
+        try { document.fonts.load(`400 20px "Font Awesome 6 Brands"`); } catch (e) {}
         const real = this.doc;
+
+        // Cámara: sigue a los equipos en movimiento y al terminar vuelve a mostrar todo el mapa
+        const alto = this.doc.alto;
+        const cam = { x: TB_ANCHO / 2, y: alto / 2, z: 1 };
+        let tPrevio = 0;
+        let salida = null;   // vuelta final a todo el mapa: interpolación exacta, no aproximada
+        const camara = (e, t) => {
+            if (t >= finRutas && !e.cabezas.length) {
+                if (!salida) salida = { t, x: cam.x, y: cam.y, z: cam.z };
+                const f = Math.min(1, (t - salida.t) / 1.4), s = f < 0.5 ? 2 * f * f : 1 - (-2 * f + 2) ** 2 / 2;
+                cam.x = salida.x + (TB_ANCHO / 2 - salida.x) * s;
+                cam.y = salida.y + (alto / 2 - salida.y) * s;
+                cam.z = salida.z + (1 - salida.z) * s;
+                const kk = k * cam.z;
+                return { k: kk, W: cv.width, H: cv.height, ox: cv.width / 2 - cam.x * kk, oy: cv.height / 2 - cam.y * kk };
+            }
+            let obj = { x: TB_ANCHO / 2, y: alto / 2, z: 1 };
+            if (e.cabezas.length) {
+                const xs = e.cabezas.map(p => p.x), ys = e.cabezas.map(p => p.y), mg = 150;
+                const x1 = Math.min(...xs) - mg, x2 = Math.max(...xs) + mg, y1 = Math.min(...ys) - mg, y2 = Math.max(...ys) + mg;
+                obj = { x: (x1 + x2) / 2, y: (y1 + y2) / 2, z: Math.max(1, Math.min(2.6, TB_ANCHO / (x2 - x1), alto / (y2 - y1))) };
+            }
+            const dt = Math.max(0, t - tPrevio);
+            tPrevio = t;
+            const a = 1 - Math.exp(-dt * 2.4);
+            cam.x += (obj.x - cam.x) * a;
+            cam.y += (obj.y - cam.y) * a;
+            cam.z = Math.exp(Math.log(cam.z) + (Math.log(obj.z) - Math.log(cam.z)) * a);
+            // Que la vista no se salga del mapa
+            const mw = TB_ANCHO / cam.z / 2, mh = alto / cam.z / 2;
+            cam.x = Math.max(mw, Math.min(TB_ANCHO - mw, cam.x));
+            cam.y = Math.max(mh, Math.min(alto - mh, cam.y));
+            const kk = k * cam.z;
+            return { k: kk, W: cv.width, H: cv.height, ox: cv.width / 2 - cam.x * kk, oy: cv.height / 2 - cam.y * kk };
+        };
 
         const cuadro = t => {
             const e = estado(t);
+            const vista = camara(e, t);
             this.doc = { ...real, objetos: e.objetos };
             this._exportando = true;
-            try { this.dibujar(c, { k, W: cv.width, H: cv.height }); }
+            try { this.dibujar(c, vista); }
             finally { this.doc = real; this._exportando = false; }
-            // Banda superior: título y reloj de la rotación
-            const h = Math.round(cv.height * 0.055);
-            c.fillStyle = 'rgba(5, 5, 8, 0.82)';
-            c.fillRect(0, 0, cv.width, h);
-            c.fillStyle = '#00f0ff'; c.fillRect(0, h - 2, cv.width, 2);
-            c.font = `700 ${Math.round(h * 0.42)}px ${TB_FUENTE}`;
-            c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = '#ffffff';
-            c.fillText(titulo, h * 0.4, h / 2);
-            if (e.reloj !== null) {
-                c.textAlign = 'right'; c.fillStyle = '#00f0ff';
-                c.fillText(`ROTACIÓN ${relojTxt(e.reloj)}`, cv.width - h * 0.4, h / 2);
-            }
+            if (leyenda.length) this._leyendaVideo(c, cv.width, cv.height, leyenda);
+            if (tiempos.length && t >= finRutas + 2) this._cierreVideo(c, cv.width, cv.height, Math.min(1, (t - finRutas - 2) / 0.6), lugar, tiempos);
+            this._rotulos(c, cv.width, cv.height, titulo, e.reloj !== null ? `ROTACIÓN ${relojTxt(e.reloj)}` : '');
         };
 
         return new Promise((resolve, reject) => {
             const flujo = cv.captureStream(fps);
-            const rec = new MediaRecorder(flujo, { mimeType: tipo, videoBitsPerSecond: 8e6 });
+            const rec = new MediaRecorder(flujo, { mimeType: tipo, videoBitsPerSecond: hd ? Math.round(cv.width * cv.height * fps * 0.06) : 4e6 });
             const trozos = [];
             rec.ondataavailable = ev => { if (ev.data.size) trozos.push(ev.data); };
             rec.onerror = ev => reject(ev.error || new Error('Falló la grabación'));
@@ -1365,11 +1480,136 @@ class Tablero {
                 const t = (performance.now() - inicio) / 1000;
                 cuadro(Math.min(t, total));
                 alProgreso(Math.min(1, t / total));
-                if (t >= total) return setTimeout(() => rec.stop(), 150);
+                // Se sigue pintando el cuadro final un momento para que quede grabado el mapa completo
+                if (t >= total + 0.6) return setTimeout(() => rec.stop(), 150);
                 setTimeout(tic, 1000 / fps);
             };
             setTimeout(tic, 1000 / fps);
         });
+    }
+
+    // Leyenda abajo a la izquierda: qué significa cada punto especial del plano
+    _leyendaVideo(c, W, H, tipos) {
+        c.save();
+        const t = Math.round(H * 0.017), m = Math.round(H * 0.018), fila = t * 2.3, ic = t * 0.85, pad = t * 0.7;
+        c.font = `700 ${t}px ${TB_FUENTE}`;
+        const w = pad * 2 + ic * 2 + pad + Math.max(...tipos.map(x => c.measureText(TB_PUNTOS[x].ley.toUpperCase()).width));
+        const h = pad * 2 + fila * tipos.length - (fila - ic * 2);
+        const x0 = m, y0 = H - m - h;
+        c.globalAlpha = 0.9;
+        c.fillStyle = 'rgba(5, 5, 8, 0.78)';
+        c.fillRect(x0, y0, w, h);
+        c.fillStyle = '#00f0ff'; c.fillRect(x0, y0, Math.max(2, t * 0.15), h);
+        tipos.forEach((x, i) => {
+            const d = TB_PUNTOS[x], cx = x0 + pad + ic, cy = y0 + pad + ic + i * fila;
+            c.fillStyle = `rgba(${d.rgb}, 0.38)`;
+            c.beginPath(); c.arc(cx, cy, ic, 0, 7); c.fill();
+            c.strokeStyle = d.col; c.lineWidth = Math.max(1.5, t * 0.15); c.stroke();
+            if (d.alas) this._alas(c, cx, cy + ic * 0.1, ic * 0.55, d.col);
+            else this._icono(c, d.glifo, cx, cy, ic * 0.95, d.col);
+            c.fillStyle = '#ffffff'; c.font = `700 ${t}px ${TB_FUENTE}`;
+            c.textAlign = 'left'; c.textBaseline = 'middle';
+            c.fillText(d.ley.toUpperCase(), cx + ic + pad, cy + 0.5);
+        });
+        c.restore();
+    }
+
+    // Cartel final del video: ROTACIÓN <MAPA> y el tiempo total (por equipo si hay varios)
+    _cierreVideo(c, W, H, a, lugar, tiempos) {
+        c.save();
+        c.globalAlpha = a;
+        c.fillStyle = 'rgba(5, 5, 8, 0.6)';
+        c.fillRect(0, 0, W, H);
+        const filas = tiempos.map(x => {
+            const eq = this.equipo(x.eq);
+            return { n: (eq ? eq.nombre : 'Equipo').toUpperCase() + (x.b ? ' · PLAN B' : ''), t: relojTxt(x.real), color: eq ? eq.color : '#00f0ff' };
+        });
+        const u = H / 100, varios = filas.length > 1;
+        // El título manda el ancho; si no cabe, se achica la letra
+        let tam = u * 5.2;
+        c.font = `900 ${tam}px ${TB_FUENTE}`;
+        const anchoTit = c.measureText(`ROTACIÓN ${lugar}`).width;
+        if (anchoTit > W * 0.84) tam *= W * 0.84 / anchoTit;
+        c.font = `900 ${tam}px ${TB_FUENTE}`;
+        const w = Math.min(W * 0.94, Math.max(W * 0.6, c.measureText(`ROTACIÓN ${lugar}`).width + u * 10));
+        const h = u * (varios ? 22 + filas.length * 5.5 : 26);
+        const x0 = (W - w) / 2, y0 = (H - h) / 2 + (1 - a) * u * 3;
+        c.fillStyle = 'rgba(5, 5, 8, 0.94)';
+        c.fillRect(x0, y0, w, h);
+        c.strokeStyle = '#00f0ff'; c.lineWidth = Math.max(2, u * 0.3);
+        c.strokeRect(x0, y0, w, h);
+        c.fillStyle = '#00f0ff'; c.fillRect(x0, y0, w, u * 0.8);
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillStyle = '#ffffff';
+        c.font = `900 ${tam}px ${TB_FUENTE}`;
+        c.fillText(`ROTACIÓN ${lugar}`, W / 2, y0 + u * 8);
+        if (!varios) {
+            c.font = `700 ${u * 3.6}px ${TB_FUENTE}`;
+            c.fillStyle = '#00f0ff';
+            c.fillText(`TIEMPO: ${filas[0].t}`, W / 2, y0 + u * 17);
+        } else {
+            c.font = `700 ${u * 2.6}px ${TB_FUENTE}`;
+            c.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            c.fillText('TIEMPO', W / 2, y0 + u * 14);
+            filas.forEach((f, i) => {
+                const y = y0 + u * (19.5 + i * 5.5);
+                c.font = `700 ${u * 2.9}px ${TB_FUENTE}`;
+                c.textAlign = 'left'; c.fillStyle = f.color;
+                c.fillText(f.n, x0 + w * 0.1, y);
+                c.textAlign = 'right'; c.fillStyle = '#ffffff';
+                c.fillText(f.t, x0 + w * 0.9, y);
+            });
+        }
+        c.restore();
+    }
+
+    // Banda con el título (roster · mapa) y marca de agua del creador abajo a la derecha
+    _rotulos(c, W, H, titulo, derecha = '') {
+        c.save();
+        const h = Math.round(H * 0.055);
+        if (titulo || derecha) {
+            c.fillStyle = 'rgba(5, 5, 8, 0.82)';
+            c.fillRect(0, 0, W, h);
+            c.fillStyle = '#00f0ff'; c.fillRect(0, h - 2, W, 2);
+            c.font = `700 ${Math.round(h * 0.42)}px ${TB_FUENTE}`;
+            c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = '#ffffff';
+            c.fillText(titulo, h * 0.4, h / 2);
+            if (derecha) { c.textAlign = 'right'; c.fillStyle = '#00f0ff'; c.fillText(derecha, W - h * 0.4, h / 2); }
+        }
+        // Marca de agua
+        const t = Math.round(H * 0.02), m = Math.round(H * 0.018);
+        c.font = `700 ${t}px ${TB_FUENTE}`;
+        const usuario = TB_CREADOR.usuario;
+        const anchoTxt = c.measureText(usuario).width;
+        c.font = `600 ${Math.round(t * 0.62)}px ${TB_FUENTE}`;
+        const anchoSub = c.measureText('CREADO POR').width;
+        const ic = t * 1.5, pad = t * 0.6;
+        const w = pad + ic + pad * 0.7 + Math.max(anchoTxt, anchoSub) + pad, alto = t * 2.6;
+        const x0 = W - m - w, y0 = H - m - alto;
+        c.globalAlpha = 0.85;
+        c.fillStyle = 'rgba(5, 5, 8, 0.75)';
+        c.fillRect(x0, y0, w, alto);
+        c.fillStyle = '#00f0ff'; c.fillRect(x0, y0, Math.max(2, t * 0.15), alto);
+        c.fillStyle = '#ffffff';
+        c.font = `400 ${ic}px "Font Awesome 6 Brands"`;
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText('', x0 + pad + ic / 2, y0 + alto / 2);
+        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        c.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        c.font = `600 ${Math.round(t * 0.62)}px ${TB_FUENTE}`;
+        c.fillText('CREADO POR', x0 + pad + ic + pad * 0.7, y0 + alto * 0.42);
+        c.fillStyle = '#ffffff';
+        c.font = `700 ${t}px ${TB_FUENTE}`;
+        c.fillText(usuario, x0 + pad + ic + pad * 0.7, y0 + alto * 0.8);
+        c.restore();
+    }
+
+    // Imagen para descargar: plano + título + marca de agua
+    async lienzoDescarga(ancho = 1600, titulo = '') {
+        try { await document.fonts.load(`400 20px "Font Awesome 6 Brands"`); } catch (e) {}
+        const c = this.lienzoExportado(ancho);
+        this._rotulos(c.getContext('2d'), c.width, c.height, titulo);
+        return c;
     }
 
     lienzoExportado(ancho = 1600) {
