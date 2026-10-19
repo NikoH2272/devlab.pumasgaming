@@ -505,3 +505,10 @@ footer .creador i { margin-right: 3px; }
 .tb-jugador-mini { width: 38px; height: 38px; flex: none; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 2px solid #00f0ff; color: #00f0ff; background: rgba(5, 5, 8, 0.6); }
 .tb-jugador-mini img { width: 100%; height: 100%; object-fit: cover; }
 .tb-jugador-foto .tb-archivo { flex: 1; justify-content: center; }
+
+.tb-slots { display: grid; gap: 4px; }
+.tb-slot { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid rgba(255, 255, 255, 0.1); border-left: 4px solid var(--c); background: rgba(5, 5, 8, 0.5); cursor: pointer; }
+.tb-slot.activo { border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent); }
+.tb-slot-color { width: 14px; height: 14px; flex: none; background: var(--c); }
+.tb-slot input { flex: 1; min-width: 0; padding: 4px 6px; font: inherit; font-weight: 700; text-transform: uppercase; }
+.tb-slot small { flex: none; font-size: 11px; color: #9ca3af; }

@@ -32,6 +32,8 @@ const TB_HERRAMIENTAS = {
     ruta:     { n: 'Rotación',      i: 'fa-route',         mapa: true, pista: 'La rotación sale de la caída del equipo · toca las paradas en orden · cada parada muestra el tiempo de llegada' },
     rutaB:    { n: 'Ruta B',        i: 'fa-code-branch',   mapa: true, pista: 'Rotación alterna (plan B) del equipo elegido · sale de la caída, igual que la principal' },
     medir:    { n: 'Medir',         i: 'fa-ruler',         mapa: true, pista: 'Arrastra entre dos puntos: distancia real y tiempo a pie y en vehículo' },
+    enemigo:   { n: 'Enemigo', i: 'fa-user-ninja', aerea: true, pista: 'Toca para marcar enemigos (gris) · sin límite' },
+    escape:    { n: 'Zona de escape', i: 'fa-person-running', aerea: true, pista: 'Arrastra en la dirección de la salida: flecha con el texto dentro' },
     peligro:   { n: 'Zona de peligro', i: 'fa-triangle-exclamation', aerea: true, pista: 'Arrastra para marcar una zona de peligro cuadrada' },
     lanzadera: { n: 'Lanzadera', i: 'fa-person-falling', pista: 'Arrastra desde la lanzadera hasta donde caes: se dibuja el salto en verde' },
     reposicion: { n: 'Reposición', i: 'fa-feather', pista: 'Punto de reposición (verde, alas de ángel) del tamaño de la caída · con Mover anota el tiempo' },
@@ -73,7 +75,7 @@ const TB_ICONOS = {
 
 // Marcas que admiten línea punteada / que no se copian ni restilizan
 const TB_CON_LINEA = ['rect', 'elipse', 'linea', 'flecha', 'trazo'];
-const TB_NO_COPIABLES = ['caida', 'ruta', 'rutaB', 'segura', 'avion'];
+const TB_NO_COPIABLES = ['caida', 'ruta', 'rutaB', 'segura', 'avion', 'jugador'];
 
 // Puntos del tamaño de la caída con color fijo
 const TB_PUNTOS = {
@@ -83,6 +85,15 @@ const TB_PUNTOS = {
 
 // Etiquetas rápidas de jugador (la última, SP, se puede repetir)
 const TB_JUGADORES = ['L1', 'L2', 'L3', 'L4', 'SP'];
+
+// Vista aérea: 4 jugadores con color fijo por puesto (el nombre se puede cambiar, el color no)
+const TB_SLOTS = [
+    { n: 'L1', color: '#ff3b30', texto: '#ffffff' },
+    { n: 'L2', color: '#22c55e', texto: '#050508' },
+    { n: 'L3', color: '#3b82f6', texto: '#ffffff' },
+    { n: 'SP', color: '#facc15', texto: '#050508' }
+];
+const TB_ENEMIGO = '#9ca3af';
 
 // Zona caliente: intensidad 1 baja · 2 media · 3 alta
 const TB_CALOR = {
@@ -119,7 +130,7 @@ class Tablero {
         this.fondo = null;              // Image del fondo
         this.etiquetaFondo = '';        // texto en la cuadrícula si no hay imagen
         this.herr = 'mover';
-        this.estilo = { color: '#00f0ff', grosor: 4, relleno: false, icono: 'objetivo', logo: null, apertura: 70, opacidad: 1, punteado: false, rayado: false, calor: 2, jugador: 'L1' };
+        this.estilo = { color: '#00f0ff', grosor: 4, relleno: false, icono: 'objetivo', logo: null, apertura: 70, opacidad: 1, punteado: false, rayado: false, calor: 2, jugador: 'L1', slot: 0 };
         this.velocidadRuta = TB_VEL_A_PIE;   // m/s para los tiempos de la rotación (lo cambia el panel)
         this.portapapeles = null;
         this.equipoSel = null;
@@ -147,6 +158,7 @@ class Tablero {
         this.seleccion = null;
         this.vista = { z: 1, x: 0, y: 0 };
         this.equipoSel = this.doc.equipos[0]?.id || null;
+        this.estilo.slot = this.slotLibre();
         this.ponerFondo(fondoSrc);
         this.alSeleccionarEquipo(this.equipoSel);
     }
@@ -258,6 +270,57 @@ class Tablero {
         return true;
     }
 
+    // ---------- Puestos de jugador (vista aérea) ----------
+    nombreJugador(s) {
+        return (this.doc.nombres && this.doc.nombres[s]) || TB_SLOTS[s].n;
+    }
+
+    jugadorDeSlot(s) {
+        return s === null || s === undefined ? null : this.doc.objetos.find(o => o.t === 'jugador' && o.slot === s) || null;
+    }
+
+    slotLibre() {
+        const i = TB_SLOTS.findIndex((_, s) => !this.jugadorDeSlot(s));
+        return i < 0 ? null : i;
+    }
+
+    // Cambia el nombre de un puesto (el color se queda)
+    renombrarJugador(s, nombre) {
+        const n = String(nombre || '').trim().toUpperCase().slice(0, 10) || TB_SLOTS[s].n;
+        this.instantanea();
+        this.doc.nombres = TB_SLOTS.map((x, i) => i === s ? n : this.nombreJugador(i));
+        const o = this.jugadorDeSlot(s);
+        if (o) o.n = n;
+        this.cambio();
+    }
+
+    // Leyenda arriba: qué color es cada jugador puesto
+    _leyendaJugadores(c, OX, OY, L, A, k) {
+        const puestos = TB_SLOTS.map((x, s) => ({ ...x, s, o: this.jugadorDeSlot(s) })).filter(x => x.o);
+        const hayEnemigos = this.doc.objetos.some(o => o.t === 'enemigo');
+        if (!puestos.length && !hayEnemigos) return;
+        const filas = puestos.map(x => ({ color: x.color, txt: this.nombreJugador(x.s) }));
+        if (hayEnemigos) filas.push({ color: TB_ENEMIGO, txt: 'ENEMIGOS' });
+        c.save();
+        const t = Math.max(9, k * 11), r = t * 0.5, sep = t * 1.3, pad = t * 0.7;
+        c.font = `700 ${t}px ${TB_FUENTE}`;
+        const anchos = filas.map(f => r * 2 + t * 0.45 + c.measureText(f.txt).width);
+        const w = anchos.reduce((s, x) => s + x, 0) + sep * (filas.length - 1) + pad * 2, h = t * 2;
+        const x0 = OX + (L - w) / 2, y0 = OY + A * 0.07;
+        c.fillStyle = 'rgba(5, 5, 8, 0.82)';
+        c.fillRect(x0, y0, w, h);
+        c.strokeStyle = 'rgba(255, 255, 255, 0.15)'; c.lineWidth = 1; c.strokeRect(x0, y0, w, h);
+        let x = x0 + pad;
+        filas.forEach((f, i) => {
+            c.fillStyle = f.color;
+            c.beginPath(); c.arc(x + r, y0 + h / 2, r, 0, 7); c.fill();
+            c.fillStyle = '#ffffff'; c.textAlign = 'left'; c.textBaseline = 'middle';
+            c.fillText(f.txt, x + r * 2 + t * 0.45, y0 + h / 2 + 0.5);
+            x += anchos[i] + sep;
+        });
+        c.restore();
+    }
+
     // Foto del jugador seleccionado; si no hay ninguno, la lleva el próximo que se ponga (null la quita)
     ponerFotoJugador(src) {
         const o = this.marcaSeleccionada;
@@ -345,9 +408,10 @@ class Tablero {
         c.strokeRect(OX, OY, L, A);
 
         // Orden de capas: zonas debajo, marcas de equipos y jugadores encima
-        const orden = ['caliente', 'peligro', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'lanzadera', 'rutaB', 'ruta', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'jugador', 'texto'];
+        const orden = ['caliente', 'peligro', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'lanzadera', 'escape', 'rutaB', 'ruta', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'enemigo', 'jugador', 'texto'];
         const objs = [...this.doc.objetos].sort((a, b) => orden.indexOf(a.t) - orden.indexOf(b.t));
         objs.forEach(o => this._objeto(c, o, P, k));
+        if (this.modo !== 'mapa') this._leyendaJugadores(c, OX, OY, L, A, k);
 
         if (!exportar && this.seleccion) this._marcoSeleccion(c, this.seleccion, P, k);
     }
@@ -588,6 +652,36 @@ class Tablero {
                     o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
                 break;
             }
+            case 'escape': {
+                // Flecha gruesa con el texto adentro
+                const a = P(o.a), b = P(o.b);
+                const L = Math.hypot(b.x - a.x, b.y - a.y);
+                if (L < 4) break;
+                const ang = Math.atan2(b.y - a.y, b.x - a.x);
+                const h = Math.max(16, k * 26), cabeza = Math.min(L * 0.45, h * 1.2), cuerpo = L - cabeza;
+                c.save();
+                c.translate(a.x, a.y); c.rotate(ang);
+                c.beginPath();
+                c.moveTo(0, -h / 2); c.lineTo(cuerpo, -h / 2); c.lineTo(cuerpo, -h); c.lineTo(L, 0);
+                c.lineTo(cuerpo, h); c.lineTo(cuerpo, h / 2); c.lineTo(0, h / 2); c.closePath();
+                c.fillStyle = 'rgba(34, 197, 94, 0.88)';
+                c.shadowColor = 'rgba(0, 0, 0, 0.7)'; c.shadowBlur = k * 8;
+                c.fill();
+                c.shadowBlur = 0;
+                c.strokeStyle = '#050508'; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
+                // Texto dentro del cuerpo, siempre al derecho
+                const texto = (o.texto || 'ZONA DE ESCAPE').toUpperCase();
+                let t = h * 0.5;
+                c.font = `900 ${t}px ${TB_FUENTE}`;
+                const disp = Math.max(10, cuerpo + cabeza * 0.35 - h * 0.4), w = c.measureText(texto).width;
+                if (w > disp) { t *= disp / w; c.font = `900 ${t}px ${TB_FUENTE}`; }
+                const cx = (cuerpo + cabeza * 0.35) / 2;
+                if (Math.abs(ang) > Math.PI / 2) { c.translate(cx, 0); c.rotate(Math.PI); c.translate(-cx, 0); }
+                c.fillStyle = '#050508'; c.textAlign = 'center'; c.textBaseline = 'middle';
+                c.fillText(texto, cx, 1);
+                c.restore();
+                break;
+            }
             case 'peligro': {
                 // Cuadrado rojo rayado con aviso en el centro
                 const a = P(o.a), b = P(o.b), col = '#ff3b30';
@@ -814,8 +908,12 @@ class Tablero {
                     o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
                 break;
             }
+            case 'enemigo':
             case 'jugador': {
-                const txt = String(o.n), largo = txt.length;
+                const slot = o.t === 'jugador' && this.modo !== 'mapa' && o.slot !== undefined ? TB_SLOTS[o.slot] : null;
+                const colJ = o.t === 'enemigo' ? TB_ENEMIGO : slot ? slot.color : (o.color || '#00f0ff');
+                const colT = slot ? slot.texto : '#050508';
+                const txt = o.t === 'enemigo' ? `E${o.n}` : slot ? this.nombreJugador(o.slot) : String(o.n), largo = txt.length;
                 const p = P(o), r = Math.max(largo > 1 ? 11 : 9, k * (largo > 1 ? 14 : 12));
                 const im = o.foto ? this.imagen(o.foto) : null;
                 if (im) {
@@ -826,19 +924,22 @@ class Tablero {
                     const lado = Math.min(im.naturalWidth, im.naturalHeight) || 1;
                     c.drawImage(im, (im.naturalWidth - lado) / 2, (im.naturalHeight - lado) / 2, lado, lado, p.x - R, p.y - R, R * 2, R * 2);
                     c.restore();
-                    c.strokeStyle = o.color || '#00f0ff'; c.lineWidth = Math.max(2.5, k * 3.2);
+                    c.strokeStyle = colJ; c.lineWidth = Math.max(2.5, k * 3.2);
                     c.beginPath(); c.arc(p.x, p.y, R, 0, 7); c.stroke();
-                    this._etiqueta(c, txt, p.x, p.y + R + Math.max(9, k * 11), k, o.color || '#00f0ff');
+                    this._etiqueta(c, txt, p.x, p.y + R + Math.max(9, k * 11), k, colJ);
                     break;
                 }
-                c.fillStyle = o.color || '#00f0ff';
+                c.fillStyle = colJ;
                 c.strokeStyle = '#050508';
                 c.lineWidth = Math.max(2, k * 2.5);
                 c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.fill(); c.stroke();
-                c.fillStyle = '#050508';
-                c.font = `900 ${Math.max(largo > 2 ? 7 : 8, k * (largo > 2 ? 8 : largo > 1 ? 10 : 11))}px ${TB_FUENTE}`;
+                c.fillStyle = colT;
+                let tamT = Math.max(largo > 2 ? 7 : 8, k * (largo > 2 ? 8 : largo > 1 ? 10 : 11));
+                c.font = `900 ${tamT}px ${TB_FUENTE}`;
+                const anchoT = c.measureText(txt).width;
+                if (anchoT > r * 1.7) { tamT *= r * 1.7 / anchoT; c.font = `900 ${tamT}px ${TB_FUENTE}`; }
                 c.textAlign = 'center'; c.textBaseline = 'middle';
-                c.fillText(String(o.n), p.x, p.y + 0.5);
+                c.fillText(txt, p.x, p.y + 0.5);
                 break;
             }
             case 'texto': {
@@ -943,7 +1044,7 @@ class Tablero {
 
     _caja(o) {
         switch (o.t) {
-            case 'rect': case 'elipse': case 'linea': case 'flecha': case 'medida': case 'lanzadera': case 'peligro':
+            case 'rect': case 'elipse': case 'linea': case 'flecha': case 'medida': case 'lanzadera': case 'peligro': case 'escape':
                 return { x1: Math.min(o.a.x, o.b.x), y1: Math.min(o.a.y, o.b.y), x2: Math.max(o.a.x, o.b.x), y2: Math.max(o.a.y, o.b.y) };
             case 'trazo': {
                 const xs = o.pts.map(p => p.x), ys = o.pts.map(p => p.y);
@@ -1018,7 +1119,8 @@ class Tablero {
             const o = this.doc.objetos[i];
             switch (o.t) {
                 case 'caida': case 'binoculares': case 'reposicion': if (cerca(o, 22 / this.k)) return { o }; break;
-                case 'jugador': case 'icono': if (cerca(o, 18 / this.k)) return { o }; break;
+                case 'jugador': case 'enemigo': case 'icono': if (cerca(o, (o.foto ? 26 : 18) / this.k)) return { o }; break;
+                case 'escape': if (distSegmento(l, o.a, o.b) < Math.max(tol, 14)) return { o }; break;
                 case 'ruta': case 'rutaB': {
                     const j = o.pts.findIndex(p => cerca(p));
                     if (j >= 0) return { o, j };
@@ -1099,7 +1201,7 @@ class Tablero {
             const a = this.arrastre;
             this.arrastre = null;
             // Formas demasiado pequeñas: se descartan (fue un clic, no un trazo)
-            if (a.nuevo && ['rect', 'elipse', 'linea', 'flecha', 'medida', 'lanzadera', 'peligro'].includes(a.nuevo.t)
+            if (a.nuevo && ['rect', 'elipse', 'linea', 'flecha', 'medida', 'lanzadera', 'peligro', 'escape'].includes(a.nuevo.t)
                 && Math.hypot(a.nuevo.b.x - a.nuevo.a.x, a.nuevo.b.y - a.nuevo.a.y) < 6) {
                 this.doc.objetos = this.doc.objetos.filter(o => o !== a.nuevo);
                 this.historial.pop();
@@ -1233,14 +1335,26 @@ class Tablero {
             return;
         }
         if (h === 'jugador') {
-            // Etiqueta elegida en el panel (L1, L2, L3, L4, SP o la que escribas); L1→L2→L3→L4 avanza sola
             const cuantos = this.doc.objetos.filter(o => o.t === 'jugador').length + 1;
-            if (this.modo === 'mapa' && cuantos > 4) return this.avisar('Ya están tus 4 jugadores. Usa Mover o Borrar.');
-            const n = this.modo === 'mapa' ? cuantos : (this.estilo.jugador || String(cuantos));
-            const nuevo = agregar({ t: 'jugador', n, x: l.x, y: l.y, color });
-            if (this.modo !== 'mapa' && this.estilo.fotoJugador) { nuevo.foto = this.estilo.fotoJugador; this.estilo.fotoJugador = null; }
-            const orden = TB_JUGADORES, i = orden.indexOf(n);
-            if (i >= 0 && i < orden.length - 2) this.estilo.jugador = orden[i + 1];
+            if (this.modo === 'mapa') {
+                if (cuantos > 4) return this.avisar('Ya están tus 4 jugadores. Usa Mover o Borrar.');
+                agregar({ t: 'jugador', n: cuantos, x: l.x, y: l.y, color });
+                this.cambio();
+                return;
+            }
+            // Vista aérea: 4 puestos fijos (L1 rojo, L2 verde, L3 azul, SP amarillo)
+            let s = this.estilo.slot;
+            if (s === null || s === undefined) s = this.slotLibre();
+            const yaPuesto = this.jugadorDeSlot(s);
+            if (yaPuesto) {                       // el puesto elegido ya está: se mueve ahí
+                this.instantanea();
+                yaPuesto.x = l.x; yaPuesto.y = l.y;
+            } else {
+                if (s === null || s === undefined) return this.avisar('Ya están los 4 jugadores. Usa Enemigo para marcar a los rivales.');
+                const nuevo = agregar({ t: 'jugador', slot: s, n: this.nombreJugador(s), x: l.x, y: l.y });
+                if (this.estilo.fotoJugador) { nuevo.foto = this.estilo.fotoJugador; this.estilo.fotoJugador = null; }
+            }
+            this.estilo.slot = this.slotLibre();
             this.cambio();
             return;
         }
@@ -1261,6 +1375,17 @@ class Tablero {
             const txt = prompt('Texto:');
             if (!txt || !txt.trim()) return;
             agregar({ t: 'texto', txt: txt.trim().slice(0, 80), x: l.x, y: l.y, color, s: 12 + grosor * 2 });
+            this.cambio();
+            return;
+        }
+        if (h === 'escape') {
+            const o = agregar({ t: 'escape', a: l, b: { ...l } });
+            this.arrastre = { t: 'forma', nuevo: o };
+            return;
+        }
+        if (h === 'enemigo') {
+            const n = this.doc.objetos.filter(o => o.t === 'enemigo').reduce((m, o) => Math.max(m, o.n || 0), 0) + 1;
+            agregar({ t: 'enemigo', n, x: l.x, y: l.y });
             this.cambio();
             return;
         }

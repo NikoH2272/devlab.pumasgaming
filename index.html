@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/moderno.css?v=25">
+    <link rel="stylesheet" href="css/moderno.css?v=26">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -275,13 +275,7 @@
                 </div>
                 <div id="tb-opc-jugador" hidden>
                     <h3 style="margin-top:10px"><i class="fa-solid fa-user"></i> <span id="tb-jugador-titulo">Siguiente jugador</span></h3>
-                    <div id="tb-jugadores" class="tb-calor tb-jugadores">
-                        <button type="button" data-j="L1" style="--c:#00f0ff" onclick="ponerJugadorTablero('L1')">L1</button>
-                        <button type="button" data-j="L2" style="--c:#00f0ff" onclick="ponerJugadorTablero('L2')">L2</button>
-                        <button type="button" data-j="L3" style="--c:#00f0ff" onclick="ponerJugadorTablero('L3')">L3</button>
-                        <button type="button" data-j="L4" style="--c:#00f0ff" onclick="ponerJugadorTablero('L4')">L4</button>
-                        <button type="button" data-j="SP" style="--c:#4ade80" onclick="ponerJugadorTablero('SP')">SP</button>
-                    </div>
+                    <div id="tb-slots" class="tb-slots"></div>
                     <div class="tb-jugador-foto">
                         <span id="tb-jugador-foto" class="tb-jugador-mini"><i class="fa-solid fa-user"></i></span>
                         <label class="btn-sec tb-archivo">
@@ -290,8 +284,7 @@
                         </label>
                         <button type="button" id="tb-jugador-quitar" class="btn-link" hidden onclick="fotoJugadorTablero(null)" title="Quitar foto"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-                    <input id="tb-jugador-otro" maxlength="3" placeholder="Otra etiqueta (ej. IGL)" aria-label="Otra etiqueta de jugador" style="margin-top:6px;width:100%" onchange="ponerJugadorTablero(this.value)">
-                    <p class="ayuda">L1 → L2 → L3 → L4 avanzan solas al ponerlas; SP se puede poner las veces que quieras. Con Mover, toca un jugador y elige otra etiqueta para cambiarla.</p>
+                    <p class="ayuda">Máximo 4 jugadores, cada uno con su color fijo. Elige el puesto y toca la imagen; si ya está puesto, se mueve. Puedes cambiar el nombre (el color no cambia). Para los rivales usa <strong>Enemigo</strong>.</p>
                 </div>
                 <div id="tb-opc-calor" hidden>
                     <h3 style="margin-top:10px">Intensidad de la zona caliente</h3>
@@ -854,8 +847,8 @@
 <script src="js/db.js?v=14"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=36"></script>
-<script src="js/estrategia.js?v=26"></script>
+<script src="js/tablero.js?v=37"></script>
+<script src="js/estrategia.js?v=27"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=18"></script>

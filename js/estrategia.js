@@ -190,14 +190,31 @@ function sincronizarJugador() {
     const esSel = sel && sel.t === 'jugador';
     caja.hidden = tablero.modo !== 'aerea' || !(tablero.herr === 'jugador' || esSel);
     if (caja.hidden) return;
-    const actual = esSel ? String(sel.n) : tablero.estilo.jugador;
-    $('#tb-jugador-titulo').textContent = esSel ? 'Jugador seleccionado' : 'Siguiente jugador';
-    $$('#tb-jugadores button').forEach(b => b.classList.toggle('activo', b.dataset.j === actual));
-    if (document.activeElement !== $('#tb-jugador-otro')) $('#tb-jugador-otro').value = TB_JUGADORES.includes(actual) ? '' : actual;
+    if (esSel && sel.slot !== undefined) tablero.estilo.slot = sel.slot;
+    const activo = tablero.estilo.slot;
+    $('#tb-jugador-titulo').textContent = esSel ? 'Jugador seleccionado' : activo === null ? 'Los 4 jugadores están puestos' : 'Toca la imagen para poner';
+    // No repintar mientras se escribe un nombre
+    if (!$('#tb-slots').contains(document.activeElement)) {
+        $('#tb-slots').innerHTML = TB_SLOTS.map((x, s) => {
+            const puesto = !!tablero.jugadorDeSlot(s);
+            return `<div class="tb-slot ${s === activo ? 'activo' : ''}" style="--c:${x.color}" onclick="elegirSlotJugador(${s})">
+                <i class="tb-slot-color"></i>
+                <input value="${esc(tablero.nombreJugador(s))}" maxlength="10" aria-label="Nombre del jugador ${s + 1}" onclick="event.stopPropagation()" onchange="tablero.renombrarJugador(${s}, this.value)">
+                <small>${puesto ? '✓ puesto' : 'libre'}</small>
+            </div>`;
+        }).join('');
+    }
     const foto = esSel ? sel.foto : tablero.estilo.fotoJugador;
     $('#tb-jugador-foto').innerHTML = foto ? `<img src="${esc(foto)}" alt="">` : '<i class="fa-solid fa-user"></i>';
     $('#tb-jugador-quitar').hidden = !foto;
     $('#tb-jugador-foto-txt').textContent = esSel ? (foto ? 'Cambiar foto' : 'Poner foto') : (foto ? 'Foto lista para el próximo' : 'Foto para el próximo');
+}
+
+function elegirSlotJugador(s) {
+    tablero.estilo.slot = s;
+    if (tablero.herr !== 'jugador') elegirHerramienta('jugador');
+    sincronizarJugador();
+    mostrarPista(`Toca la imagen para poner a ${tablero.nombreJugador(s)}${tablero.jugadorDeSlot(s) ? ' (ya está: se mueve)' : ''}`);
 }
 
 async function fotoJugadorTablero(input) {
