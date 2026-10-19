@@ -2055,9 +2055,15 @@ class Tablero {
             y = titulo('EVENTOS', y);
             const fila = u * 3.4, cupo = Math.max(1, Math.floor((finEventos - y) / fila));
             const hechos = e => r >= e.t0 + e.dur && (e.dur > 0 || r >= e.t0);
-            const primero = Math.max(0, d.eventos.findIndex(e => !hechos(e)) - 1);
-            const ini = Math.min(primero < 0 ? 0 : primero, Math.max(0, d.eventos.length - cupo));
-            d.eventos.slice(ini, ini + cupo).forEach(e => {
+            // Lo que ya se hizo sale de la lista: solo quedan la acción en curso y las siguientes
+            const pendientes = d.eventos.filter(e => !hechos(e));
+            const listos = d.eventos.length - pendientes.length;
+            if (listos) {
+                letra(u * 1.3, 700); c.fillStyle = '#4ade80'; c.textAlign = 'right';
+                c.fillText(`✓ ${listos}/${d.eventos.length}`, x + w, y - u * 3.2); c.textAlign = 'left';
+            }
+            if (!pendientes.length) { letra(u * 1.5, 700); c.fillStyle = '#4ade80'; c.fillText('✓ Todas las acciones completadas', x, y); y += fila; }
+            pendientes.slice(0, cupo).forEach(e => {
                 const hecho = hechos(e), activo = e.dur > 0 && r >= e.t0 && r < e.t0 + e.dur;
                 letra(u * 1.45, 700); c.fillStyle = activo ? '#00f0ff' : '#6b7280'; c.fillText(relojTxt(e.t0), x, y + u * 0.3);
                 c.fillStyle = e.color; c.beginPath(); c.arc(x + u * 7.4, y + u * 1.1, u * 0.6, 0, 7); c.fill();
