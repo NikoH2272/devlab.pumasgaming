@@ -58,6 +58,7 @@ async function abrirEstrategia(tipo, registro = null) {
     pintarAnalisisTablero();
     tbActual.recortes = [];
     setTimeout(pintarFormatoInforme, 150);
+    pintarLinea();
 }
 
 // Imagen subida por la organización; si no hay, la incluida en iconosobs/mapas
@@ -81,6 +82,7 @@ function alCambiarTablero(evento) {
     sincronizarApertura();
     sincronizarPausa();
     sincronizarJugador();
+    pintarLinea();
     marcarCambio();
     pintarEquiposTablero();
     pintarAnalisisTablero();
@@ -93,6 +95,84 @@ function sincronizarApertura() {
     if (!o || o.t !== 'vision') return;
     $('#tb-apertura').value = o.ap;
     $('#tb-apertura-txt').textContent = o.ap + '°';
+}
+
+// ---------- Línea de tiempo (panel derecho) ----------
+const TB_EVENTOS_RAPIDOS = ['Zona cierra', 'Airdrop', 'Pasa el avión', 'Rotar', 'Revivir', 'Pelea cerca', 'Comprar'];
+
+function abrirLinea(abrir = $('#tb-linea').hidden) {
+    $('#tb-linea').hidden = !abrir;
+    $('.tb-layout').classList.toggle('con-linea', abrir);
+    $('#tb-btn-linea').classList.toggle('activo', abrir);
+    if (abrir) pintarLinea();
+    setTimeout(() => tablero && tablero.medir(), 30);
+}
+
+// "1:30" o "90" → 90 segundos
+function aSegundos(v) {
+    const s = String(v || '').trim();
+    if (s.includes(':')) { const [m, ss] = s.split(':'); return Math.max(0, (Number(m) || 0) * 60 + (Number(ss) || 0)); }
+    return Math.max(0, Number(s) || 0);
+}
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+
+function opcionesQuien(actual) {
+    const refs = tablero.modo === 'mapa'
+        ? tablero.doc.equipos.map(e => ({ v: 'e:' + e.id, n: e.nombre }))
+        : TB_SLOTS.map((x, s) => ({ v: 's:' + s, n: tablero.nombreJugador(s) })).filter(x => tablero.jugadorDeSlot(Number(x.v.slice(2))));
+    return `<option value="">General</option>` + refs.map(r => `<option value="${esc(r.v)}" ${r.v === actual ? 'selected' : ''}>${esc(r.n)}</option>`).join('');
+}
+
+function pintarLinea() {
+    const caja = $('#tb-linea-cont');
+    if (!caja || $('#tb-linea').hidden || !tablero) return;
+    if (caja.contains(document.activeElement)) return;      // no repintar mientras se escribe
+    const g = tablero._guionVideo();
+    const total = Math.max(0, ...g.eventos.map(e => e.t0 + e.dur));
+    $('#tb-linea-total').textContent = g.eventos.length ? `Total ${relojTxt(total)}` : '';
+    window._tbEventos = g.eventos;
+    caja.innerHTML = g.eventos.length ? g.eventos.map((e, i) => {
+        if (e.libre) {
+            const ev = tablero.doc.eventosLibres.find(x => x.id === e.libre) || {};
+            return `<div class="tb-ev libre" style="--c:${e.color}">
+                <div class="tb-ev-fila">
+                    <input class="tb-ev-t" value="${mmss(e.t0)}" aria-label="Inicio" title="Inicio (m:ss)" onchange="tablero.editarEventoLibre('${ev.id}', { t0: aSegundos(this.value) }); pintarLinea()">
+                    <input class="tb-ev-txt" value="${esc(ev.txt || '')}" maxlength="40" aria-label="Evento" onchange="tablero.editarEventoLibre('${ev.id}', { txt: this.value.trim() || 'Evento' })">
+                    <button type="button" class="btn-link" onclick="tablero.borrarEventoLibre('${ev.id}'); pintarLinea()" title="Borrar evento"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="tb-ev-fila">
+                    <select aria-label="Quién" onchange="tablero.editarEventoLibre('${ev.id}', { quien: this.value }); pintarLinea()">${opcionesQuien(ev.quien)}</select>
+                    <label class="tb-ev-dur"><input type="number" min="0" max="900" step="5" value="${ev.dur || ''}" placeholder="0" aria-label="Duración" onchange="tablero.editarEventoLibre('${ev.id}', { dur: Math.max(0, Number(this.value) || 0) }); pintarLinea()"> s</label>
+                </div>
+            </div>`;
+        }
+        const editable = !!e.p;
+        return `<div class="tb-ev ${editable ? '' : 'auto'}" style="--c:${e.color}" ${e.sel ? `onclick="if (event.target.tagName !== 'INPUT') elegirEventoLinea(${i})"` : ''}>
+            <div class="tb-ev-fila">
+                <span class="tb-ev-t fijo">${mmss(e.t0)}</span>
+                <strong class="tb-ev-n">${esc(e.n)}</strong>
+                ${editable ? `<input class="tb-ev-txt" value="${esc(e.p.nota || '')}" placeholder="Pausa" maxlength="24" aria-label="Acción" onchange="tablero.editarPausaPunto(window._tbEventos[${i}].p, 'nota', this.value)">`
+                    : `<span class="tb-ev-txt">${esc(e.txt)}</span>`}
+                ${editable ? `<label class="tb-ev-dur"><input type="number" min="0" max="900" step="5" value="${e.p.pausa || ''}" placeholder="0" aria-label="Segundos" onchange="tablero.editarPausaPunto(window._tbEventos[${i}].p, 'pausa', this.value)"> s</label>`
+                    : e.dur ? `<span class="tb-ev-dur">${Math.round(e.dur)} s</span>` : ''}
+            </div>
+        </div>`;
+    }).join('') : '<p class="ayuda">Aún no hay eventos. Pon pausas en las rotaciones o agrega eventos libres abajo.</p>';
+}
+
+function elegirEventoLinea(i) {
+    const e = window._tbEventos && window._tbEventos[i];
+    if (!e || !e.sel) return;
+    elegirHerramienta('mover');
+    tablero.seleccion = e.sel;
+    tablero.dibujar();
+    tablero.alSeleccionar(e.sel);
+}
+
+function agregarEventoLinea(txt) {
+    const ultimo = Math.max(0, ...(window._tbEventos || []).map(e => e.t0 + e.dur));
+    tablero.agregarEventoLibre({ t0: Math.round(ultimo), txt: txt || 'Evento', dur: 0 });
+    pintarLinea();
 }
 
 function marcarCambio() {

@@ -278,6 +278,38 @@ class Tablero {
         return true;
     }
 
+    // ---------- Eventos libres (línea de tiempo) ----------
+    agregarEventoLibre(datos) {
+        this.instantanea();
+        const e = { id: 'ev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t0: 0, dur: 0, txt: 'Evento', quien: '', ...datos };
+        (this.doc.eventosLibres = this.doc.eventosLibres || []).push(e);
+        this.cambio();
+        return e;
+    }
+
+    editarEventoLibre(id, cambios) {
+        const e = (this.doc.eventosLibres || []).find(x => x.id === id);
+        if (!e) return;
+        if (this._eventoEditando !== id) { this.instantanea(); this._eventoEditando = id; }
+        Object.assign(e, cambios);
+        this.cambio();
+    }
+
+    borrarEventoLibre(id) {
+        this.instantanea();
+        this.doc.eventosLibres = (this.doc.eventosLibres || []).filter(x => x.id !== id);
+        this.cambio();
+    }
+
+    // Cambia el texto o los segundos de una pausa de la rotación desde el panel
+    editarPausaPunto(p, campo, valor) {
+        if (!p) return;
+        if (this._pausaEn !== p) { this.instantanea(); this._pausaEn = p; }
+        if (campo === 'nota') { const v = String(valor || '').trim().slice(0, 24); if (v) p.nota = v; else delete p.nota; }
+        else { const s = Math.max(0, Math.min(900, Math.round(Number(valor) || 0))); if (s) p.pausa = s; else delete p.pausa; }
+        this.cambio();
+    }
+
     // ---------- Ataque sincronizado ----------
     // Una rotación se identifica como 's:<puesto>' (jugador, vista aérea) o 'e:<equipo>' (mapa)
     refRuta(o) {
@@ -1840,11 +1872,17 @@ class Tablero {
             });
             if (mejor) visores.set(v, mejor.tr);
         });
-        const maxReal = Math.max(1, ...rutas.map(r => r.real), ...[...visores].map(([v, tr]) => tr + (v.pausa || 0)));
+        // Eventos libres (anotados en la línea de tiempo, sin rotación)
+        const libres = (this.doc.eventosLibres || []).map(e => ({
+            t0: Number(e.t0) || 0, dur: Number(e.dur) || 0, txt: e.txt || 'Evento', libre: e.id,
+            n: e.quien ? this.nombreRef(e.quien) : 'General', color: e.quien ? this.colorRef(e.quien) : '#00f0ff'
+        }));
+        const hayLinea = rutas.length > 0 || libres.length > 0;
+        const maxReal = Math.max(1, ...rutas.map(r => r.real), ...[...visores].map(([v, tr]) => tr + (v.pausa || 0)), ...libres.map(e => e.t0 + e.dur));
         const escala = Math.min(10 / maxReal, 1);   // la más larga dura ~10 s; nunca más lento que el juego
-        const finRutas = finEntrada + (rutas.length ? 0.4 + maxReal * escala : 0);
+        const finRutas = finEntrada + (hayLinea ? 0.4 + maxReal * escala : 0);
         // Al final: la cámara vuelve a todo el mapa (1.4 s) y después sale el cartel de cierre
-        const total = finRutas + (rutas.length ? 6.5 : 2.5);
+        const total = finRutas + (rutas.length ? 6.5 : hayLinea ? 3 : 2.5);
         const tiempos = rutas.map(r => {
             const eq = r.o.t === 'rutaJ' ? { nombre: this.nombreJugador(r.o.slot), color: TB_SLOTS[r.o.slot].color } : this.equipo(r.o.eq);
             return { nombre: eq ? eq.nombre : 'Equipo', color: eq ? eq.color : '#00f0ff', b: r.o.t === 'rutaB', real: r.real };
@@ -1869,7 +1907,7 @@ class Tablero {
 
         const estado = t => {
             const lista = [], cabezas = [];
-            const reloj = rutas.length && t >= t0r ? Math.min(t - t0r, maxReal * escala) / escala : null;
+            const reloj = hayLinea && t >= t0r ? Math.min(t - t0r, maxReal * escala) / escala : null;
             apariciones.forEach(o => {
                 const t0 = entrada.get(o);
                 if (t < t0) return;
@@ -1936,15 +1974,17 @@ class Tablero {
             const q = quien(r.o);
             let tr = 0;
             r.pasos.forEach(s => {
-                if (s.tipo === 'pausa') eventos.push({ t0: tr, dur: s.dur, n: q.n, txt: s.etiqueta || s.p.nota || 'Pausa', color: q.color });
+                if (s.tipo === 'pausa') eventos.push({ t0: tr, dur: s.dur, n: q.n, txt: s.etiqueta || s.p.nota || 'Pausa', color: q.color,
+                    p: s.etiqueta ? null : s.p, sel: s.etiqueta ? null : s.p === r.caida ? { o: r.caida } : { o: r.o, j: r.o.pts.indexOf(s.p) } });
                 tr += s.dur;
             });
             eventos.push({ t0: tr, dur: 0, n: q.n, txt: 'Llega al final', color: q.color });
         });
         const NOMBRES = { vision: 'Visor', binoculares: 'Binoculares', reposicion: 'Reposición', uav: 'UAV' };
         objs.filter(o => (o.t === 'vision' || tbPulso(o.t)) && o.pausa).forEach(o => {
-            eventos.push({ t0: visores.has(o) ? visores.get(o) : 0, dur: o.pausa, n: NOMBRES[o.t], txt: o.nota || 'Activo', color: o.t === 'vision' ? o.color : tbEspecial(o.t).col });
+            eventos.push({ t0: visores.has(o) ? visores.get(o) : 0, dur: o.pausa, n: NOMBRES[o.t], txt: o.nota || 'Activo', color: o.t === 'vision' ? o.color : tbEspecial(o.t).col, p: o, sel: { o } });
         });
+        eventos.push(...libres);
         eventos.sort((a, b) => a.t0 - b.t0 || b.dur - a.dur);
         return { total, estado, finRutas, tiempos, eventos };
     }
