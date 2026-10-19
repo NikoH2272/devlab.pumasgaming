@@ -259,7 +259,7 @@ class Tablero {
     get puntoPausa() {
         const o = this.marcaSeleccionada;
         if (!o) return null;
-        if (o.t === 'caida' || o.t === 'vision' || tbPulso(o.t) || (o.t === 'jugador' && this.modo !== 'mapa')) return { p: o, tipo: o.t };
+        if (o.t === 'caida' || o.t === 'vision' || tbPulso(o.t) || o.t === 'jugador') return { p: o, tipo: o.t };
         if ((o.t === 'ruta' || o.t === 'rutaB' || o.t === 'rutaJ') && o.pts[this.seleccion.j]) return { p: o.pts[this.seleccion.j], tipo: 'parada', n: this.seleccion.j + 2, b: o.t === 'rutaB' };
         return null;
     }
@@ -1476,24 +1476,30 @@ class Tablero {
             const cuantos = this.doc.objetos.filter(o => o.t === 'jugador').length + 1;
             if (this.modo === 'mapa') {
                 if (cuantos > 4) return this.avisar('Ya están tus 4 jugadores. Usa Mover o Borrar.');
-                agregar({ t: 'jugador', n: cuantos, x: l.x, y: l.y, color });
+                const nuevoM = agregar({ t: 'jugador', n: cuantos, x: l.x, y: l.y, color });
+                this.seleccion = { o: nuevoM };
                 this.cambio();
+                this.alSeleccionar(this.seleccion);
                 return;
             }
             // Vista aérea: 4 puestos fijos (L1 rojo, L2 verde, L3 azul, SP amarillo)
             let s = this.estilo.slot;
             if (s === null || s === undefined) s = this.slotLibre();
             const yaPuesto = this.jugadorDeSlot(s);
+            let puesto = yaPuesto;
             if (yaPuesto) {                       // el puesto elegido ya está: se mueve ahí
                 this.instantanea();
                 yaPuesto.x = l.x; yaPuesto.y = l.y;
             } else {
                 if (s === null || s === undefined) return this.avisar('Ya están los 4 jugadores. Usa Enemigo para marcar a los rivales.');
-                const nuevo = agregar({ t: 'jugador', slot: s, n: this.nombreJugador(s), x: l.x, y: l.y });
-                if (this.estilo.fotoJugador) { nuevo.foto = this.estilo.fotoJugador; this.estilo.fotoJugador = null; }
+                puesto = agregar({ t: 'jugador', slot: s, n: this.nombreJugador(s), x: l.x, y: l.y });
+                if (this.estilo.fotoJugador) { puesto.foto = this.estilo.fotoJugador; this.estilo.fotoJugador = null; }
             }
             this.estilo.slot = this.slotLibre();
+            // Queda elegido para ponerle su tiempo (pausa antes de salir) en el panel
+            this.seleccion = { o: puesto };
             this.cambio();
+            this.alSeleccionar(this.seleccion);
             return;
         }
         if (h === 'icono') {

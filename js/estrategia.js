@@ -155,7 +155,7 @@ function sincronizarPausa() {
     const sel = tablero && tablero.puntoPausa;
     caja.hidden = !sel;
     if (!sel) return;
-    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'Tiempo activo del visor' : sel.tipo === 'binoculares' ? 'En los binoculares' : sel.tipo === 'reposicion' ? 'En la reposición' : sel.tipo === 'uav' ? 'Escaneo del UAV' : sel.tipo === 'jugador' ? `Antes de salir · ${tablero.nombreJugador(sel.p.slot ?? 0)}` : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
+    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'Tiempo activo del visor' : sel.tipo === 'binoculares' ? 'En los binoculares' : sel.tipo === 'reposicion' ? 'En la reposición' : sel.tipo === 'uav' ? 'Escaneo del UAV' : sel.tipo === 'jugador' ? `Antes de salir · ${sel.p.slot !== undefined ? tablero.nombreJugador(sel.p.slot) : 'Jugador ' + sel.p.n}` : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
     $('#tb-pausa-titulo').textContent = titulo;
     // No pisar lo que el usuario está escribiendo
     if (document.activeElement !== $('#tb-pausa-nota')) $('#tb-pausa-nota').value = sel.p.nota || '';
@@ -193,7 +193,8 @@ function sincronizarJugador() {
     const esSel = sel && sel.t === 'jugador';
     caja.hidden = tablero.modo !== 'aerea' || !(['jugador', 'rutaJ'].includes(tablero.herr) || esSel);
     if (caja.hidden) return;
-    if (esSel && sel.slot !== undefined) tablero.estilo.slot = sel.slot;
+    // Con Mover, tocar un jugador elige su puesto; al ponerlos, el puesto avanza solo al siguiente libre
+    if (esSel && sel.slot !== undefined && tablero.herr === 'mover') tablero.estilo.slot = sel.slot;
     const activo = tablero.estilo.slot;
     $('#tb-jugador-titulo').textContent = tablero.herr === 'rutaJ' ? `Rotación de ${tablero.nombreJugador(activo ?? 0)}`
         : esSel ? 'Jugador seleccionado' : activo === null ? 'Los 4 jugadores están puestos' : 'Toca la imagen para poner';
