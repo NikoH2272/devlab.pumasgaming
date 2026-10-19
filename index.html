@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/moderno.css?v=32">
+    <link rel="stylesheet" href="css/moderno.css?v=33">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -350,6 +350,14 @@
                 <button type="button" class="btn-generar" onclick="guardarTablero()"><i class="fa-solid fa-box-archive"></i> GUARDAR EN LA REPISA</button>
                 <div class="tb-fila-botones">
                     <button type="button" class="btn-sec" onclick="descargarTablero()"><i class="fa-solid fa-download"></i> PNG</button>
+                    <div id="tb-contenido" class="tb-contenido" hidden>
+                        <h4><i class="fa-solid fa-star"></i> Contenido <em>solo super admin</em></h4>
+                        <input id="tb-cont-etiqueta" maxlength="30" aria-label="Etiqueta" onchange="ponerContenido('etiqueta', this.value.trim())">
+                        <input id="tb-cont-nombre" maxlength="30" aria-label="Nombre grande" onchange="ponerContenido('nombre', this.value.trim())">
+                        <input id="tb-cont-firma" maxlength="30" aria-label="Firma" onchange="ponerContenido('firma', this.value.trim())">
+                        <label class="check"><input type="checkbox" id="tb-cont-intro" onchange="ponerContenido('intro', this.checked)"> Intro de contenido en el video</label>
+                        <button type="button" class="btn-generar" onclick="descargarContenido()"><i class="fa-solid fa-image"></i> Descargar portada</button>
+                    </div>
                     <label class="tb-informe-caja">Informe del video
                         <select id="tb-informe" onchange="ponerFormatoInforme(this.value)" aria-label="Dónde va el informe en el video">
                             <option value="auto">Automático (según la imagen)</option>
@@ -890,8 +898,8 @@
 <script src="js/db.js?v=15"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=51"></script>
-<script src="js/estrategia.js?v=35"></script>
+<script src="js/tablero.js?v=54"></script>
+<script src="js/estrategia.js?v=36"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=18"></script>

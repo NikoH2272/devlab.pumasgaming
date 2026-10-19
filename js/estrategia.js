@@ -58,6 +58,7 @@ async function abrirEstrategia(tipo, registro = null) {
     pintarAnalisisTablero();
     tbActual.recortes = [];
     setTimeout(pintarFormatoInforme, 150);
+    pintarContenido();
     pintarLinea();
 }
 
@@ -83,6 +84,7 @@ function alCambiarTablero(evento) {
     sincronizarPausa();
     sincronizarJugador();
     pintarLinea();
+    pintarContenido();
     marcarCambio();
     pintarEquiposTablero();
     pintarAnalisisTablero();
@@ -817,6 +819,56 @@ async function descargarTablero() {
     }, 'image/png');
 }
 
+// ---------- Contenido (solo super admin): portada estilo "drop spot" ----------
+function datosContenido() {
+    const d = tablero.doc.contenido || {};
+    const mapa = tablero.modo === 'mapa';
+    const eq = mapa ? (tablero.equipo(tablero.equipoSel) || tablero.doc.equipos.find(e => tablero.caidaDe(e.id))) : null;
+    const caida = eq ? tablero.caidaDe(eq.id) : null;
+    const sel = $('#tb-roster');
+    const roster = sel && sel.value ? sel.options[sel.selectedIndex].text : '';
+    return {
+        etiqueta: d.etiqueta || (mapa ? 'Caída' : 'Planteamiento de juego'),
+        nombre: d.nombre || (eq ? eq.nombre : roster) || 'Pumas Gaming',
+        firma: d.firma || 'Coach Niko',
+        foco: caida ? { x: caida.x, y: caida.y } : null,
+        logo: eq ? eq.logo : null,
+        conMarcas: !mapa
+    };
+}
+
+function pintarContenido() {
+    const caja = $('#tb-contenido');
+    if (!caja || !tablero) return;
+    caja.hidden = !Auth.esAdmin();
+    if (caja.hidden) return;
+    const d = tablero.doc.contenido || {}, auto = datosContenido();
+    ['etiqueta', 'nombre', 'firma'].forEach(k => {
+        const el = $('#tb-cont-' + k);
+        if (document.activeElement !== el) { el.value = d[k] || ''; el.placeholder = auto[k]; }
+    });
+    $('#tb-cont-intro').checked = !!d.intro;
+}
+
+function ponerContenido(campo, valor) {
+    tablero.doc.contenido = { ...(tablero.doc.contenido || {}), [campo]: valor };
+    marcarCambio();
+}
+
+async function descargarContenido() {
+    if (!Auth.esAdmin()) return;
+    const datos = datosContenido();
+    if (tablero.modo === 'mapa' && !datos.foco) return toast('Marca la caída del equipo para la portada.', 'error');
+    const c = await tablero.lienzoContenido(1600, datos);
+    c.toBlob(b => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = `contenido-${archivoDescarga()}-${fechaLocal(new Date())}.png`;
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    }, 'image/png');
+}
+
 let tbGrabando = false;
 async function descargarVideoTablero(btn, hd = false) {
     if (tbGrabando) return;
@@ -827,8 +879,9 @@ async function descargarVideoTablero(btn, hd = false) {
     const titulo = tituloDescarga();
     toast('Grabando el video… deja esta pestaña abierta y a la vista.');
     try {
+        const contenido = Auth.esAdmin() && $('#tb-cont-intro').checked ? datosContenido() : null;
         const { blob, ext } = await tablero.grabarVideo({
-            hd, titulo,
+            hd, titulo, contenido,
             alProgreso: f => { btn.innerHTML = `<i class="fa-solid fa-circle" style="color:#ff3b30"></i> ${Math.round(f * 100)}%`; }
         });
         const nombre = archivoDescarga();

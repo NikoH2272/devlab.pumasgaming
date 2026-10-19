@@ -2008,7 +2008,7 @@ class Tablero {
         return f === 'auto' ? (TB_ANCHO / this.doc.alto > 1.05 ? 'abajo' : 'lado') : f;
     }
 
-    grabarVideo({ hd = false, titulo = '', alProgreso = () => {} } = {}) {
+    grabarVideo({ hd = false, titulo = '', alProgreso = () => {}, contenido = null } = {}) {
         const fps = hd ? 60 : 30;
         if (typeof MediaRecorder === 'undefined') return Promise.reject(new Error('Este navegador no puede grabar video.'));
         const cv = document.createElement('canvas');
@@ -2097,6 +2097,42 @@ class Tablero {
             this._rotulos(c, cv.width, cv.height, '', '');
         };
 
+        // Intro de contenido (super admin): súper zoom con la portada y luego se despeja
+        const INTRO = contenido ? 3.6 : 0;
+        const totalV = total + INTRO;
+        const suave = f => f < 0.5 ? 2 * f * f : 1 - (-2 * f + 2) ** 2 / 2;
+        const cuadroIntro = t => {
+            const foco = contenido.foco || { x: TB_ANCHO / 2, y: alto / 2 };
+            // El foco queda a la izquierda (como en la portada) para que la tarjeta entre a su derecha
+            let z, px, py, ax, ay;
+            if (t < 2.8) { z = 3.4 - 2.05 * suave(Math.min(1, t / 0.9)); px = foco.x; py = foco.y; ax = 0.34; ay = 0.56; }
+            else {
+                const f = suave(Math.min(1, (t - 2.8) / 0.8));
+                z = 1.35 - 0.35 * f; px = foco.x + (TB_ANCHO / 2 - foco.x) * f; py = foco.y + (alto / 2 - foco.y) * f;
+                ax = 0.34 + 0.16 * f; ay = 0.56 - 0.06 * f;
+            }
+            const kk = k * z;
+            let ox = mapaX + mapaW * ax - px * kk, oy = mapaY + mapaH * ay - py * kk;
+            ox = Math.min(mapaX, Math.max(mapaX + mapaW - TB_ANCHO * kk, ox));
+            oy = Math.min(mapaY, Math.max(mapaY + mapaH - alto * kk, oy));
+            const vista = { k: kk, W: cv.width, H: cv.height, ox, oy };
+            this.doc = { ...real, objetos: [] };
+            this._exportando = true; this._enVideo = true;
+            c.fillStyle = '#050508'; c.fillRect(0, 0, cv.width, cv.height);
+            c.save();
+            c.beginPath(); c.rect(mapaX, mapaY, mapaW, mapaH); c.clip();
+            try { this.dibujar(c, vista); }
+            finally { this.doc = real; this._exportando = false; this._enVideo = false; }
+            const alfa = t < 0.5 ? t / 0.5 : t < 2.8 ? 1 : Math.max(0, 1 - (t - 2.8) / 0.7);
+            this._portada(c, { x: mapaX, y: mapaY, w: mapaW, h: mapaH }, { ...contenido, alfa,
+                focoPx: contenido.foco ? { x: vista.ox + contenido.foco.x * kk, y: vista.oy + contenido.foco.y * kk } : null });
+            c.restore();
+            this._marcaMini(c, mapaX + mapaW, mapaY + mapaH, abajo ? cv.width : cv.height);
+            this._panelVideo(c, panel, { titulo, reloj: null, eventos, leyenda });
+            this._rotulos(c, cv.width, cv.height, '', '');
+        };
+        const cuadroFinal = t => t < INTRO ? cuadroIntro(t) : cuadro(t - INTRO);
+
         return new Promise((resolve, reject) => {
             const flujo = cv.captureStream(fps);
             const rec = new MediaRecorder(flujo, { mimeType: tipo, videoBitsPerSecond: hd ? Math.round(cv.width * cv.height * fps * 0.05) : 6e6 });
@@ -2105,17 +2141,17 @@ class Tablero {
             rec.onerror = ev => reject(ev.error || new Error('Falló la grabación'));
             rec.onstop = () => {
                 flujo.getTracks().forEach(tr => tr.stop());
-                resolve({ blob: new Blob(trozos, { type: tipo.split(';')[0] }), ext: tipo.includes('mp4') ? 'mp4' : 'webm', segundos: total });
+                resolve({ blob: new Blob(trozos, { type: tipo.split(';')[0] }), ext: tipo.includes('mp4') ? 'mp4' : 'webm', segundos: totalV });
             };
-            cuadro(0);
+            cuadroFinal(0);
             rec.start(250);
             const inicio = performance.now();
             const tic = () => {
                 const t = (performance.now() - inicio) / 1000;
-                cuadro(Math.min(t, total));
-                alProgreso(Math.min(1, t / total));
+                cuadroFinal(Math.min(t, totalV));
+                alProgreso(Math.min(1, t / totalV));
                 // Se sigue pintando el cuadro final un momento para que quede grabado el mapa completo
-                if (t >= total + 0.6) return setTimeout(() => rec.stop(), 150);
+                if (t >= totalV + 0.6) return setTimeout(() => rec.stop(), 150);
                 setTimeout(tic, 1000 / fps);
             };
             setTimeout(tic, 1000 / fps);
@@ -2123,6 +2159,129 @@ class Tablero {
     }
 
     // Leyenda abajo a la izquierda: qué significa cada punto especial del plano
+    // ---------- Portada de contenido (estilo "drop spot") ----------
+    // o: { etiqueta, nombre, firma, focoPx: {x,y} en píxeles o null, logo (src), alfa }
+    _portada(c, R, o) {
+        const s = R.w / 1000, AM = '#f5c518', RO = '#e3262b';
+        const alfa = o.alfa ?? 1;
+        if (alfa <= 0) return;
+        c.save();
+        c.globalAlpha = alfa;
+        c.beginPath(); c.rect(R.x, R.y, R.w, R.h); c.clip();
+        // Oscurecer y franjas diagonales en las esquinas
+        c.fillStyle = 'rgba(5, 5, 8, 0.38)'; c.fillRect(R.x, R.y, R.w, R.h);
+        const franjas = (x, y, w, h) => {
+            c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+            c.strokeStyle = 'rgba(245, 197, 24, 0.16)'; c.lineWidth = 5 * s;
+            for (let d = -h; d < w + h; d += 16 * s) { c.beginPath(); c.moveTo(x + d, y + h); c.lineTo(x + d + h, y); c.stroke(); }
+            c.restore();
+        };
+        franjas(R.x, R.y, R.w * 0.22, R.h * 0.12);
+        franjas(R.x, R.y + R.h * 0.62, R.w * 0.06, R.h * 0.38);
+        franjas(R.x + R.w * 0.9, R.y + R.h * 0.2, R.w * 0.1, R.h * 0.3);
+        // Marco amarillo con cruces en las esquinas
+        const m = 22 * s, x1 = R.x + m, y1 = R.y + m, x2 = R.x + R.w - m, y2 = R.y + R.h - m;
+        c.strokeStyle = AM; c.lineWidth = Math.max(2, 3.5 * s);
+        c.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(1.5, 2 * s);
+        [[x1, y1], [x2, y1], [x1, y2], [x2, y2]].forEach(([x, y]) => {
+            c.beginPath(); c.moveTo(x - 12 * s, y); c.lineTo(x + 12 * s, y); c.moveTo(x, y - 12 * s); c.lineTo(x, y + 12 * s); c.stroke();
+        });
+        // Barras de acento a la izquierda
+        c.fillStyle = RO; c.fillRect(R.x + 4 * s, y1 + 10 * s, 7 * s, R.h * 0.16);
+        c.fillStyle = AM; c.fillRect(R.x + 4 * s, y1 + 20 * s + R.h * 0.16, 7 * s, R.h * 0.24);
+        const letra = (peso, tam, fam = "'Rajdhani', sans-serif") => { c.font = `${peso} ${tam}px ${fam}`; };
+        const espaciado = v => { if ('letterSpacing' in c) c.letterSpacing = v; };
+        // Foco: aro punteado, aro blanco, pin con el logo
+        let cardX, cardY;
+        if (o.focoPx) {
+            const f = o.focoPx, rr = 165 * s;
+            c.strokeStyle = AM; c.lineWidth = Math.max(2, 3.5 * s); c.setLineDash([12 * s, 9 * s]);
+            c.beginPath(); c.arc(f.x, f.y, rr, 0, 7); c.stroke(); c.setLineDash([]);
+            [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+                const px = f.x + dx * rr, py = f.y + dy * rr;
+                c.beginPath(); c.moveTo(px - dx * 16 * s, py - dy * 16 * s); c.lineTo(px + dx * 16 * s, py + dy * 16 * s); c.stroke();
+                c.beginPath(); c.moveTo(px - dy * 9 * s, py - dx * 9 * s); c.lineTo(px + dy * 9 * s, py + dx * 9 * s); c.stroke();
+            });
+            c.strokeStyle = 'rgba(255, 255, 255, 0.9)'; c.lineWidth = Math.max(1.5, 2.5 * s);
+            c.beginPath(); c.arc(f.x, f.y, rr * 0.63, 0, 7); c.stroke();
+            // Pin
+            const pr = 48 * s, py = f.y - 92 * s;
+            c.fillStyle = AM;
+            c.beginPath(); c.moveTo(f.x - 16 * s, py + pr * 0.8); c.lineTo(f.x, f.y - 30 * s); c.lineTo(f.x + 16 * s, py + pr * 0.8); c.fill();
+            c.beginPath(); c.arc(f.x, py, pr, 0, 7); c.fill();
+            c.fillStyle = '#0b0b0d'; c.beginPath(); c.arc(f.x, py, pr * 0.8, 0, 7); c.fill();
+            const im = o.logo ? this.imagen(o.logo) : null;
+            if (im && im.complete && im.naturalWidth) {
+                c.save(); c.beginPath(); c.arc(f.x, py, pr * 0.74, 0, 7); c.clip();
+                c.drawImage(im, f.x - pr * 0.74, py - pr * 0.74, pr * 1.48, pr * 1.48); c.restore();
+            } else {
+                letra(700, 40 * s); c.fillStyle = AM; c.textAlign = 'center'; c.textBaseline = 'middle';
+                c.fillText(iniciales(o.nombre || 'PG'), f.x, py + 2 * s);
+            }
+            c.fillStyle = '#0b0b0d'; c.beginPath(); c.arc(f.x, f.y, 9 * s, 0, 7); c.fill();
+            c.strokeStyle = AM; c.lineWidth = 3 * s; c.stroke();
+            cardX = f.x + rr * 1.0; cardY = f.y - 58 * s;
+        } else {
+            cardX = x1 + 40 * s; cardY = y1 + 40 * s;
+        }
+        // Tarjeta: etiqueta, nombre y firma
+        const etiqueta = (o.etiqueta || '').toUpperCase(), nombre = (o.nombre || '').toUpperCase(), firma = (o.firma || '').toUpperCase();
+        letra(700, 64 * s); espaciado('0px');
+        let tamN = 64 * s;
+        const anchoMax = Math.min(560 * s, x2 - 30 * s - cardX - 40 * s > 260 * s ? x2 - 30 * s - cardX - 40 * s : 560 * s);
+        while (c.measureText(nombre).width > anchoMax && tamN > 26 * s) { tamN -= 2 * s; letra(700, tamN); }
+        const anchoNombre = c.measureText(nombre).width;
+        letra(700, 19 * s); espaciado(`${4 * s}px`);
+        const anchoEt = c.measureText(etiqueta).width, anchoF = c.measureText(firma).width + 40 * s;
+        const cw = Math.max(anchoNombre, anchoEt, anchoF) + 56 * s, ch = 40 * s + tamN + 46 * s;
+        if (o.focoPx && cardX + cw > x2 - 10 * s) cardX = o.focoPx.x - 165 * s - cw;   // si no cabe a la derecha, a la izquierda
+        cardX = Math.max(x1 + 10 * s, Math.min(x2 - cw - 10 * s, cardX));
+        cardY = Math.max(y1 + 10 * s, Math.min(y2 - 90 * s - ch, cardY));
+        c.fillStyle = 'rgba(11, 11, 13, 0.94)'; c.fillRect(cardX, cardY, cw, ch);
+        c.fillStyle = AM; c.fillRect(cardX, cardY, 6 * s, ch);
+        c.textAlign = 'left'; c.textBaseline = 'top';
+        c.fillStyle = AM; letra(700, 19 * s); espaciado(`${4 * s}px`);
+        c.fillText(etiqueta, cardX + 28 * s, cardY + 18 * s);
+        c.fillStyle = '#ffffff'; letra(700, tamN); espaciado('0px');
+        c.fillText(nombre, cardX + 26 * s, cardY + 40 * s);
+        c.fillStyle = RO; c.fillRect(cardX + 28 * s, cardY + 52 * s + tamN, 24 * s, 13 * s);
+        c.fillStyle = '#ffffff'; letra(600, 17 * s); espaciado(`${3 * s}px`);
+        c.fillText(firma, cardX + 62 * s, cardY + 49 * s + tamN);
+        // Barra inferior
+        const bh = 54 * s, by = y2 - bh - 14 * s, bx = x1 + 14 * s, bw = x2 - x1 - 28 * s;
+        c.fillStyle = 'rgba(11, 11, 13, 0.94)'; c.fillRect(bx, by, bw, bh);
+        c.strokeStyle = AM; c.lineWidth = Math.max(1.5, 2 * s); c.strokeRect(bx, by, bw, bh);
+        c.fillStyle = AM; c.beginPath(); c.arc(bx + 30 * s, by + bh / 2, 10 * s, 0, 7); c.fill();
+        c.textBaseline = 'middle'; letra(700, 21 * s); espaciado(`${4 * s}px`);
+        c.fillStyle = '#ffffff'; c.fillText(`${etiqueta} · `, bx + 52 * s, by + bh / 2 + 1);
+        const ancho1 = c.measureText(`${etiqueta} · `).width;
+        c.fillStyle = AM; c.fillText(nombre, bx + 52 * s + ancho1, by + bh / 2 + 1);
+        c.textAlign = 'right'; c.fillStyle = '#ffffff';
+        c.fillText(firma, bx + bw - 70 * s, by + bh / 2 + 1);
+        c.fillStyle = RO; c.fillRect(bx + bw - 58 * s, by + bh / 2 - 10 * s, 36 * s, 20 * s);
+        espaciado('0px');
+        c.restore();
+    }
+
+    // Imagen de contenido para descargar (PNG)
+    async lienzoContenido(ancho, datos) {
+        try { await document.fonts.load(`700 40px 'Rajdhani'`); } catch (e) {}
+        if (datos.logo) await new Promise(r => { const im = this.imagen(datos.logo); if (!im || im.complete) return r(); im.onload = im.onerror = r; });
+        const cv = document.createElement('canvas');
+        cv.width = ancho; cv.height = Math.round(ancho * this.doc.alto / TB_ANCHO);
+        const c = cv.getContext('2d'), k = ancho / TB_ANCHO;
+        const real = this.doc;
+        // En Mapas la portada va limpia (solo el punto de caída); en vista aérea con el planteamiento
+        if (!datos.conMarcas) this.doc = { ...real, objetos: [] };
+        this._exportando = true;
+        try { this.dibujar(c, { k, W: cv.width, H: cv.height }); }
+        finally { this.doc = real; this._exportando = false; }
+        // La firma de la barra ya acredita al creador: sin la marca de agua grande encima
+        this._portada(c, { x: 0, y: 0, w: cv.width, h: cv.height }, { ...datos, focoPx: datos.foco ? { x: datos.foco.x * k, y: datos.foco.y * k } : null });
+        return cv;
+    }
+
     // Marca de agua pequeña y semitransparente en la esquina del mapa
     _marcaMini(c, xDer, yAbajo, H) {
         c.save();
