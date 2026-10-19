@@ -636,3 +636,6 @@ body.adm-hoja-abierta { overflow: hidden; }
 }
 #vista-admin .card-box i, .adm-hoja i { font-size: inherit; margin: 0; display: inline-block; }
 #vista-admin .card-box { text-align: left; }
+
+.tb-pausa-acciones button.ataque { border-color: rgba(255, 59, 48, 0.5); color: #ffb4ae; }
+.tb-pausa-acciones button.ataque.activar { background: rgba(255, 59, 48, 0.18); color: #fff; font-weight: 700; }

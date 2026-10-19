@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/moderno.css?v=28">
+    <link rel="stylesheet" href="css/moderno.css?v=29">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -260,8 +260,13 @@
                         <button type="button" onclick="accionPausa('Curarse')">Curarse</button>
                         <button type="button" onclick="accionPausa('Vigilar')">Vigilar</button>
                         <button type="button" onclick="accionPausa('Buscar vehículo')">Vehículo</button>
-                        <button type="button" onclick="accionPausa('Tomar casa')">Tomar casa</button>
+                        <button type="button" onclick="accionPausa('Asegurar casa')">Asegurar casa</button>
+                        <button type="button" onclick="accionPausa('Comprar')">Comprar</button>
+                        <button type="button" onclick="accionPausa('Controlar zona')">Controlar zona</button>
+                        <button type="button" onclick="accionPausa('Distraer')">Distraer</button>
                         <button type="button" onclick="accionPausa('Pelear')">Pelear</button>
+                        <button type="button" class="ataque" onclick="accionPausa('Preparar ataque')"><i class="fa-solid fa-crosshairs"></i> Preparar ataque</button>
+                        <button type="button" class="ataque activar" onclick="accionPausa('Activar ataque')"><i class="fa-solid fa-bolt"></i> Activar ataque</button>
                     </div>
                     <div class="tb-pausa-campos">
                         <input id="tb-pausa-nota" maxlength="24" placeholder="Qué hacen aquí" aria-label="Qué hace el equipo en este punto" oninput="ponerPausaTablero()">
@@ -822,8 +827,8 @@
 <script src="js/db.js?v=15"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=42"></script>
-<script src="js/estrategia.js?v=30"></script>
+<script src="js/tablero.js?v=44"></script>
+<script src="js/estrategia.js?v=31"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=18"></script>

@@ -847,6 +847,17 @@ class Tablero {
                     c.strokeStyle = 'rgba(255, 59, 48, 0.55)'; c.lineWidth = Math.max(6, k * 11);
                     c.beginPath(); c.moveTo(camino[i].x, camino[i].y); c.lineTo(camino[i + 1].x, camino[i + 1].y); c.stroke();
                 }
+                // Desde la parada marcada "Activar ataque" la rotación pasa a modo ataque
+                const ataqueDesde = logico.findIndex(q => /activar ataque/i.test(q.nota || ''));
+                if (ataqueDesde >= 0) {
+                    c.save();
+                    c.strokeStyle = 'rgba(255, 59, 48, 0.5)'; c.lineWidth = Math.max(7, k * 12);
+                    c.shadowColor = '#ff3b30'; c.shadowBlur = k * 12;
+                    c.beginPath(); c.moveTo(camino[ataqueDesde].x, camino[ataqueDesde].y);
+                    camino.slice(ataqueDesde + 1).forEach(q => c.lineTo(q.x, q.y));
+                    c.stroke();
+                    c.restore();
+                }
                 c.strokeStyle = c.fillStyle = eq.color;
                 c.lineWidth = Math.max(esB ? 1.5 : 2, k * (esB ? 3 : 4.5));
                 if (esB) { c.globalAlpha = op * 0.8; c.setLineDash([k * 12, k * 8]); }
@@ -857,6 +868,7 @@ class Tablero {
                 c.setLineDash([]);
                 c.shadowBlur = 0;
                 this._punta(c, camino[camino.length - 2], camino[camino.length - 1], Math.max(8, k * (esB ? 10 : 13)));
+                if (ataqueDesde >= 0) this._modoAtaque(c, camino, ataqueDesde, k);
                 // Paradas con número (B1, B2… en la ruta B) y tiempo de llegada acumulado
                 const mpu = this.modo === 'mapa' ? metrosPorUnidad(this.mapaActual) : 0;
                 const velR = this.velocidadRuta || TB_VEL_A_PIE;
@@ -1080,6 +1092,38 @@ class Tablero {
             out.push({ x: a.x + dx * t + nx * h, y: a.y + dy * t + ny * h });
         }
         return out;
+    }
+
+    // Rotación de ataque: chevrones ">>" a lo largo del tramo y mira roja donde se activa
+    _modoAtaque(c, camino, desde, k) {
+        c.save();
+        const paso = Math.max(18, k * 26), s = Math.max(4, k * 6);
+        c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(1.5, k * 2.2);
+        c.shadowColor = '#ff3b30'; c.shadowBlur = k * 6;
+        for (let i = desde; i < camino.length - 1; i++) {
+            const a = camino[i], b = camino[i + 1], L = Math.hypot(b.x - a.x, b.y - a.y);
+            const ang = Math.atan2(b.y - a.y, b.x - a.x), cs = Math.cos(ang), sn = Math.sin(ang);
+            for (let d = paso * 0.75; d < L - paso * 0.6; d += paso) {
+                const cx = a.x + cs * d, cy = a.y + sn * d;
+                [0, s * 0.9].forEach(off => {
+                    const px = cx + cs * off, py = cy + sn * off;
+                    c.beginPath();
+                    c.moveTo(px - cs * s - sn * s, py - sn * s + cs * s);
+                    c.lineTo(px, py);
+                    c.lineTo(px - cs * s + sn * s, py - sn * s - cs * s);
+                    c.stroke();
+                });
+            }
+        }
+        // Mira donde se activa el ataque
+        const p = camino[desde], r = Math.max(8, k * 10);
+        const bx = p.x + r * 1.8, by = p.y + r * 1.6;   // abajo a la derecha: arriba va el cartel
+        c.shadowBlur = 0;
+        c.fillStyle = '#ff3b30';
+        c.beginPath(); c.arc(bx, by, r, 0, 7); c.fill();
+        c.strokeStyle = '#050508'; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
+        this._icono(c, '', bx, by, r * 1.1, '#ffffff');
+        c.restore();
     }
 
     // Alas de ángel con aureola (centro del punto de reposición); s = media anchura
@@ -1742,7 +1786,7 @@ class Tablero {
                 const parte = avance(r, reloj);
                 // El punto donde está detenido no repite su cartel (lo lleva el escudo con la cuenta atrás)
                 const pts = (r.caida ? parte.pts.slice(1) : parte.pts).map(p => parte.pausa && p === parte.pausa.p ? { x: p.x, y: p.y } : p);
-                if (pts.length) lista.push({ ...r.o, pts, _origen: r.caida ? { x: r.pts[0].x, y: r.pts[0].y, pausa: r.pts[0].pausa } : null });
+                if (pts.length) lista.push({ ...r.o, pts, _origen: r.caida ? { x: r.pts[0].x, y: r.pts[0].y, pausa: r.pts[0].pausa, nota: r.pts[0].nota } : null });
                 if (!parte.completa) cabezas.push(parte.cabeza);
                 if (r.caida && r.caida.t === 'jugador') lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _pausa: parte.pausa || null, _sinCartel: true });
                 else if (!parte.completa && r.caida) lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _movil: true, _pausa: parte.pausa || null });

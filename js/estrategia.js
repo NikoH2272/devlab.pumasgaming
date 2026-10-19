@@ -166,7 +166,8 @@ function ponerPausaTablero() {
 
 function accionPausa(nombre) {
     $('#tb-pausa-nota').value = nombre;
-    if (!Number($('#tb-pausa-seg').value)) $('#tb-pausa-seg').value = 30;
+    // "Activar ataque" marca desde dónde la rotación es de ataque; no necesita pausa
+    if (nombre !== 'Activar ataque' && !Number($('#tb-pausa-seg').value)) $('#tb-pausa-seg').value = 30;
     ponerPausaTablero();
 }
 
