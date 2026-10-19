@@ -153,7 +153,7 @@ function sincronizarPausa() {
     const sel = tablero && tablero.puntoPausa;
     caja.hidden = !sel;
     if (!sel) return;
-    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'En este visor' : sel.tipo === 'binoculares' ? 'En los binoculares' : sel.tipo === 'reposicion' ? 'En la reposición' : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
+    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'En este visor' : sel.tipo === 'binoculares' ? 'En los binoculares' : sel.tipo === 'reposicion' ? 'En la reposición' : sel.tipo === 'jugador' ? `Antes de salir · ${tablero.nombreJugador(sel.p.slot ?? 0)}` : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
     $('#tb-pausa-titulo').textContent = titulo;
     // No pisar lo que el usuario está escribiendo
     if (document.activeElement !== $('#tb-pausa-nota')) $('#tb-pausa-nota').value = sel.p.nota || '';
@@ -188,19 +188,21 @@ function sincronizarJugador() {
     if (!caja || !tablero) return;
     const sel = tablero.marcaSeleccionada;
     const esSel = sel && sel.t === 'jugador';
-    caja.hidden = tablero.modo !== 'aerea' || !(tablero.herr === 'jugador' || esSel);
+    caja.hidden = tablero.modo !== 'aerea' || !(['jugador', 'rutaJ'].includes(tablero.herr) || esSel);
     if (caja.hidden) return;
     if (esSel && sel.slot !== undefined) tablero.estilo.slot = sel.slot;
     const activo = tablero.estilo.slot;
-    $('#tb-jugador-titulo').textContent = esSel ? 'Jugador seleccionado' : activo === null ? 'Los 4 jugadores están puestos' : 'Toca la imagen para poner';
+    $('#tb-jugador-titulo').textContent = tablero.herr === 'rutaJ' ? `Rotación de ${tablero.nombreJugador(activo ?? 0)}`
+        : esSel ? 'Jugador seleccionado' : activo === null ? 'Los 4 jugadores están puestos' : 'Toca la imagen para poner';
     // No repintar mientras se escribe un nombre
     if (!$('#tb-slots').contains(document.activeElement)) {
         $('#tb-slots').innerHTML = TB_SLOTS.map((x, s) => {
             const puesto = !!tablero.jugadorDeSlot(s);
+            const rot = tablero.doc.objetos.find(o => o.t === 'rutaJ' && o.slot === s);
             return `<div class="tb-slot ${s === activo ? 'activo' : ''}" style="--c:${x.color}" onclick="elegirSlotJugador(${s})">
                 <i class="tb-slot-color"></i>
                 <input value="${esc(tablero.nombreJugador(s))}" maxlength="10" aria-label="Nombre del jugador ${s + 1}" onclick="event.stopPropagation()" onchange="tablero.renombrarJugador(${s}, this.value)">
-                <small>${puesto ? '✓ puesto' : 'libre'}</small>
+                <small>${puesto ? (rot ? `${rot.pts.length} parada${rot.pts.length > 1 ? 's' : ''}` : '✓ puesto') : 'libre'}</small>
             </div>`;
         }).join('');
     }
@@ -212,7 +214,11 @@ function sincronizarJugador() {
 
 function elegirSlotJugador(s) {
     tablero.estilo.slot = s;
-    if (tablero.herr !== 'jugador') elegirHerramienta('jugador');
+    if (!['jugador', 'rutaJ'].includes(tablero.herr)) elegirHerramienta('jugador');
+    if (tablero.herr === 'rutaJ') {
+        sincronizarJugador();
+        return mostrarPista(tablero.jugadorDeSlot(s) ? `Toca las paradas de ${tablero.nombreJugador(s)}` : `Pon primero a ${tablero.nombreJugador(s)} con la herramienta Jugador`);
+    }
     sincronizarJugador();
     mostrarPista(`Toca la imagen para poner a ${tablero.nombreJugador(s)}${tablero.jugadorDeSlot(s) ? ' (ya está: se mueve)' : ''}`);
 }

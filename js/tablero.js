@@ -30,6 +30,7 @@ const TB_HERRAMIENTAS = {
     mover:    { n: 'Mover',         i: 'fa-up-down-left-right', pista: 'Arrastra una marca para moverla · doble clic en un texto para editarlo · arrastra el fondo para desplazarte' },
     caida:    { n: 'Caída',         i: 'fa-location-dot',  mapa: true, pista: 'Elige un equipo en la lista y toca el mapa donde cae' },
     ruta:     { n: 'Rotación',      i: 'fa-route',         mapa: true, pista: 'La rotación sale de la caída del equipo · toca las paradas en orden · cada parada muestra el tiempo de llegada' },
+    rutaJ:    { n: 'Rotación jugador', i: 'fa-person-walking-arrow-right', aerea: true, pista: 'Elige el jugador en el panel y toca las paradas: la rotación sale de donde está' },
     rutaB:    { n: 'Ruta B',        i: 'fa-code-branch',   mapa: true, pista: 'Rotación alterna (plan B) del equipo elegido · sale de la caída, igual que la principal' },
     medir:    { n: 'Medir',         i: 'fa-ruler',         mapa: true, pista: 'Arrastra entre dos puntos: distancia real y tiempo a pie y en vehículo' },
     enemigo:   { n: 'Enemigo', i: 'fa-user-ninja', aerea: true, pista: 'Toca para marcar enemigos (gris) · sin límite' },
@@ -75,7 +76,7 @@ const TB_ICONOS = {
 
 // Marcas que admiten línea punteada / que no se copian ni restilizan
 const TB_CON_LINEA = ['rect', 'elipse', 'linea', 'flecha', 'trazo'];
-const TB_NO_COPIABLES = ['caida', 'ruta', 'rutaB', 'segura', 'avion', 'jugador'];
+const TB_NO_COPIABLES = ['caida', 'ruta', 'rutaB', 'rutaJ', 'segura', 'avion', 'jugador'];
 
 // Puntos del tamaño de la caída con color fijo
 const TB_PUNTOS = {
@@ -251,8 +252,8 @@ class Tablero {
     get puntoPausa() {
         const o = this.marcaSeleccionada;
         if (!o) return null;
-        if (o.t === 'caida' || o.t === 'vision' || TB_PUNTOS[o.t]) return { p: o, tipo: o.t };
-        if ((o.t === 'ruta' || o.t === 'rutaB') && o.pts[this.seleccion.j]) return { p: o.pts[this.seleccion.j], tipo: 'parada', n: this.seleccion.j + 2, b: o.t === 'rutaB' };
+        if (o.t === 'caida' || o.t === 'vision' || TB_PUNTOS[o.t] || (o.t === 'jugador' && this.modo !== 'mapa')) return { p: o, tipo: o.t };
+        if ((o.t === 'ruta' || o.t === 'rutaB' || o.t === 'rutaJ') && o.pts[this.seleccion.j]) return { p: o.pts[this.seleccion.j], tipo: 'parada', n: this.seleccion.j + 2, b: o.t === 'rutaB' };
         return null;
     }
 
@@ -268,6 +269,24 @@ class Tablero {
         if (s) p.pausa = s; else delete p.pausa;
         this.cambio();
         return true;
+    }
+
+    // Punto de salida de una rotación: la caída del equipo o el jugador (vista aérea)
+    origenRuta(o) {
+        return o.t === 'rutaJ' ? this.jugadorDeSlot(o.slot) : this.caidaDe(o.eq);
+    }
+
+    // Jugador detenido en una parada (video): anillo que se vacía y cartel con la cuenta atrás
+    _pausaJugador(c, o, p, R, color, k) {
+        const pa = o._pausa;
+        if (pa) {
+            const f = pa.resta / pa.total;
+            c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(2, k * 3);
+            c.beginPath(); c.arc(p.x, p.y, R + Math.max(4, k * 6), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); c.stroke();
+            this._cartel(c, Tablero.textoPausa(pa.p, pa.resta), p.x, p.y - R - Math.max(6, k * 9), k, color, f);
+        } else if (!o._sinCartel && (o.nota || o.pausa)) {
+            this._cartel(c, Tablero.textoPausa(o), p.x, p.y - R - 2, k, color);
+        }
     }
 
     // ---------- Puestos de jugador (vista aérea) ----------
@@ -408,7 +427,7 @@ class Tablero {
         c.strokeRect(OX, OY, L, A);
 
         // Orden de capas: zonas debajo, marcas de equipos y jugadores encima
-        const orden = ['caliente', 'peligro', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'lanzadera', 'escape', 'rutaB', 'ruta', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'enemigo', 'jugador', 'texto'];
+        const orden = ['caliente', 'peligro', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'lanzadera', 'escape', 'rutaB', 'ruta', 'rutaJ', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'enemigo', 'jugador', 'texto'];
         const objs = [...this.doc.objetos].sort((a, b) => orden.indexOf(a.t) - orden.indexOf(b.t));
         objs.forEach(o => this._objeto(c, o, P, k));
         if (this.modo !== 'mapa') this._leyendaJugadores(c, OX, OY, L, A, k);
@@ -762,9 +781,10 @@ class Tablero {
                 break;
             }
             case 'ruta':
-            case 'rutaB': {
-                const eq = this.equipo(o.eq);
-                const caida = this.caidaDe(o.eq);
+            case 'rutaB':
+            case 'rutaJ': {
+                const eq = o.t === 'rutaJ' ? { color: TB_SLOTS[o.slot].color } : this.equipo(o.eq);
+                const caida = this.origenRuta(o);
                 const logico = caida ? [caida, ...o.pts] : o.pts;
                 const camino = logico.map(P);
                 if (!eq || camino.length < 2) break;
@@ -927,6 +947,7 @@ class Tablero {
                     c.strokeStyle = colJ; c.lineWidth = Math.max(2.5, k * 3.2);
                     c.beginPath(); c.arc(p.x, p.y, R, 0, 7); c.stroke();
                     this._etiqueta(c, txt, p.x, p.y + R + Math.max(9, k * 11), k, colJ);
+                    this._pausaJugador(c, o, p, R, colJ, k);
                     break;
                 }
                 c.fillStyle = colJ;
@@ -940,6 +961,7 @@ class Tablero {
                 if (anchoT > r * 1.7) { tamT *= r * 1.7 / anchoT; c.font = `900 ${tamT}px ${TB_FUENTE}`; }
                 c.textAlign = 'center'; c.textBaseline = 'middle';
                 c.fillText(txt, p.x, p.y + 0.5);
+                this._pausaJugador(c, o, p, r, colJ, k);
                 break;
             }
             case 'texto': {
@@ -1074,7 +1096,7 @@ class Tablero {
     }
 
     _marcoSeleccion(c, sel, P, k) {
-        if ((sel.o.t === 'ruta' || sel.o.t === 'rutaB') && sel.o.pts[sel.j]) {
+        if ((sel.o.t === 'ruta' || sel.o.t === 'rutaB' || sel.o.t === 'rutaJ') && sel.o.pts[sel.j]) {
             const p = P(sel.o.pts[sel.j]);
             c.save();
             c.strokeStyle = '#00f0ff'; c.lineWidth = 1.5; c.setLineDash([4, 3]);
@@ -1121,7 +1143,7 @@ class Tablero {
                 case 'caida': case 'binoculares': case 'reposicion': if (cerca(o, 22 / this.k)) return { o }; break;
                 case 'jugador': case 'enemigo': case 'icono': if (cerca(o, (o.foto ? 26 : 18) / this.k)) return { o }; break;
                 case 'escape': if (distSegmento(l, o.a, o.b) < Math.max(tol, 14)) return { o }; break;
-                case 'ruta': case 'rutaB': {
+                case 'ruta': case 'rutaB': case 'rutaJ': {
                     const j = o.pts.findIndex(p => cerca(p));
                     if (j >= 0) return { o, j };
                     break;
@@ -1254,7 +1276,7 @@ class Tablero {
             const m = this.marcaEn(l);
             if (!m) return;
             this.instantanea();
-            if ((m.o.t === 'ruta' || m.o.t === 'rutaB') && m.j !== undefined) {
+            if ((m.o.t === 'ruta' || m.o.t === 'rutaB' || m.o.t === 'rutaJ') && m.j !== undefined) {
                 m.o.pts.splice(m.j, 1);
                 if (!m.o.pts.length) this.doc.objetos = this.doc.objetos.filter(o => o !== m.o);
             } else this.doc.objetos = this.doc.objetos.filter(o => o !== m.o);
@@ -1378,6 +1400,19 @@ class Tablero {
             this.cambio();
             return;
         }
+        if (h === 'rutaJ') {
+            const s = this.estilo.slot ?? 0;
+            const jug = this.jugadorDeSlot(s);
+            if (!jug) return this.avisar(`Pon primero a ${this.nombreJugador(s)} con la herramienta Jugador`);
+            this.instantanea();
+            let ruta = this.doc.objetos.find(o => o.t === 'rutaJ' && o.slot === s);
+            if (ruta) ruta.pts.push(l);
+            else this.doc.objetos.push(ruta = { t: 'rutaJ', slot: s, pts: [l] });
+            this.seleccion = { o: ruta, j: ruta.pts.length - 1 };
+            this.cambio();
+            this.alSeleccionar(this.seleccion);
+            return;
+        }
         if (h === 'escape') {
             const o = agregar({ t: 'escape', a: l, b: { ...l } });
             this.arrastre = { t: 'forma', nuevo: o };
@@ -1423,7 +1458,7 @@ class Tablero {
         } else if (a.t === 'mover') {
             const dx = l.x - a.ultimo.x, dy = l.y - a.ultimo.y;
             a.ultimo = l;
-            if ((a.m.o.t === 'ruta' || a.m.o.t === 'rutaB') && a.m.j !== undefined) {
+            if ((a.m.o.t === 'ruta' || a.m.o.t === 'rutaB' || a.m.o.t === 'rutaJ') && a.m.j !== undefined) {
                 a.m.o.pts[a.m.j].x += dx; a.m.o.pts[a.m.j].y += dy;
             } else desplazar(a.m.o, dx, dy);
         } else if (a.t === 'radio') {
@@ -1457,7 +1492,7 @@ class Tablero {
         if (!o) return false;
         this.instantanea();
         const j = this.seleccion.j;
-        if ((o.t === 'ruta' || o.t === 'rutaB') && j !== undefined && o.pts.length > 1) o.pts.splice(j, 1);
+        if ((o.t === 'ruta' || o.t === 'rutaB' || o.t === 'rutaJ') && j !== undefined && o.pts.length > 1) o.pts.splice(j, 1);
         else this.doc.objetos = this.doc.objetos.filter(x => x !== o);
         this.seleccion = null;
         this.cambio();
@@ -1526,7 +1561,7 @@ class Tablero {
     // Devuelve la línea de tiempo (segundos de video) y una función que arma el documento de cada instante.
     _guionVideo() {
         const objs = this.doc.objetos;
-        const esRuta = o => o.t === 'ruta' || o.t === 'rutaB';
+        const esRuta = o => o.t === 'ruta' || o.t === 'rutaB' || o.t === 'rutaJ';
         // Primero zonas y marcas generales, luego caídas; las rotaciones al final se animan aparte
         const peso = o => o.t === 'caida' ? 1 : 0;
         const apariciones = objs.filter(o => !esRuta(o) && !((o.t === 'vision' || TB_PUNTOS[o.t]) && this._visorDeRuta(o))).map((o, i) => ({ o, i })).sort((a, b) => peso(a.o) - peso(b.o) || a.i - b.i).map(x => x.o);
@@ -1539,7 +1574,7 @@ class Tablero {
         const mpu = this.modo === 'mapa' ? metrosPorUnidad(this.mapaActual) : 0;
         const vel = this.velocidadRuta || TB_VEL_A_PIE;
         const rutas = objs.filter(esRuta).map(o => {
-            const caida = this.caidaDe(o.eq);
+            const caida = this.origenRuta(o);
             const pts = caida ? [caida, ...o.pts] : o.pts;
             const pasos = [];
             if (caida && caida.pausa) pasos.push({ tipo: 'pausa', dur: caida.pausa, p: caida });
@@ -1572,7 +1607,10 @@ class Tablero {
         const finRutas = finEntrada + (rutas.length ? 0.4 + maxReal * escala : 0);
         // Al final: la cámara vuelve a todo el mapa (1.4 s) y después sale el cartel de cierre
         const total = finRutas + (rutas.length ? 6.5 : 2.5);
-        const tiempos = rutas.map(r => ({ eq: r.o.eq, b: r.o.t === 'rutaB', real: r.real }));
+        const tiempos = rutas.map(r => {
+            const eq = r.o.t === 'rutaJ' ? { nombre: this.nombreJugador(r.o.slot), color: TB_SLOTS[r.o.slot].color } : this.equipo(r.o.eq);
+            return { nombre: eq ? eq.nombre : 'Equipo', color: eq ? eq.color : '#00f0ff', b: r.o.t === 'rutaB', real: r.real };
+        });
         const t0r = finEntrada + 0.4;
 
         // Dónde va el equipo a los `tr` segundos de juego
@@ -1614,6 +1652,7 @@ class Tablero {
                     lista.push({ ...o, op: (o.op ?? 1) * a * (restaB ? 1 : 0.45), _resta: restaB, ...(restaB ? { _pulso: ((t - t0) / 1.4) % 1 } : {}) });
                     return;
                 }
+                if (o.t === 'jugador' && reloj !== null && rutas.some(r => r.caida === o)) return;
                 if (o.t === 'caida' && rutas.some(r => r.caida === o)) {
                     lista.push({ ...o, op: (o.op ?? 1) * a, _sinCartel: reloj !== null && reloj < (o.pausa || 0) });
                     return;
@@ -1642,7 +1681,8 @@ class Tablero {
                 const pts = (r.caida ? parte.pts.slice(1) : parte.pts).map(p => parte.pausa && p === parte.pausa.p ? { x: p.x, y: p.y } : p);
                 if (pts.length) lista.push({ ...r.o, pts });
                 if (!parte.completa) cabezas.push(parte.cabeza);
-                if (!parte.completa && r.caida) lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _movil: true, _pausa: parte.pausa || null });
+                if (r.caida && r.caida.t === 'jugador') lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _pausa: parte.pausa || null, _sinCartel: true });
+                else if (!parte.completa && r.caida) lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _movil: true, _pausa: parte.pausa || null });
             });
             return { objetos: lista, reloj, cabezas };
         };
@@ -1652,8 +1692,8 @@ class Tablero {
     // ¿Este visor está junto a la caída o a una parada de alguna rotación?
     _visorDeRuta(v) {
         return this.doc.objetos.some(o => {
-            if (o.t !== 'ruta' && o.t !== 'rutaB') return false;
-            const caida = this.caidaDe(o.eq);
+            if (!(o.t === 'ruta' || o.t === 'rutaB' || o.t === 'rutaJ')) return false;
+            const caida = this.origenRuta(o);
             return [...(caida ? [caida] : []), ...o.pts].some(p => Math.hypot(p.x - v.x, p.y - v.y) < 40);
         });
     }
@@ -1786,8 +1826,7 @@ class Tablero {
         c.fillStyle = 'rgba(5, 5, 8, 0.6)';
         c.fillRect(0, 0, W, H);
         const filas = tiempos.map(x => {
-            const eq = this.equipo(x.eq);
-            return { n: (eq ? eq.nombre : 'Equipo').toUpperCase() + (x.b ? ' · PLAN B' : ''), t: relojTxt(x.real), color: eq ? eq.color : '#00f0ff' };
+            return { n: x.nombre.toUpperCase() + (x.b ? ' · PLAN B' : ''), t: relojTxt(x.real), color: x.color };
         });
         const u = H / 100, varios = filas.length > 1;
         // El título manda el ancho; si no cabe, se achica la letra
