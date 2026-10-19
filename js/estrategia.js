@@ -160,6 +160,22 @@ function sincronizarPausa() {
     // No pisar lo que el usuario está escribiendo
     if (document.activeElement !== $('#tb-pausa-nota')) $('#tb-pausa-nota').value = sel.p.nota || '';
     if (document.activeElement !== $('#tb-pausa-seg')) $('#tb-pausa-seg').value = sel.p.pausa || '';
+    // Al activar ataque se puede sincronizar con otro jugador (o equipo en Mapas)
+    const ataque = /activar ataque/i.test(sel.p.nota || '');
+    $('#tb-sync').hidden = !ataque;
+    if (ataque) {
+        const ops = tablero.opcionesSync();
+        $('#tb-sync-sel').innerHTML = '<option value="">— Sin sincronizar —</option>' +
+            ops.map(x => `<option value="${esc(x.ref)}" ${sel.p.sync === x.ref ? 'selected' : ''}>${esc(x.n)}</option>`).join('');
+        $('#tb-sync-txt').textContent = sel.p.sync
+            ? `Atacan juntos: el que llegue primero espera a ${tablero.nombreRef(sel.p.sync)}.`
+            : ops.length ? 'Elige con quién entra al mismo tiempo.' : (tablero.modo === 'mapa' ? 'Agrega otro equipo con caída.' : 'Pon a otro jugador para sincronizar.');
+    }
+}
+
+function ponerSyncTablero(ref) {
+    tablero.ponerSync(ref);
+    sincronizarPausa();
 }
 
 function ponerPausaTablero() {

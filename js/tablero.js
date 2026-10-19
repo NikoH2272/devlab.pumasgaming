@@ -36,7 +36,7 @@ const TB_HERRAMIENTAS = {
     uav:       { n: 'UAV', i: 'fa-satellite', aerea: true, pista: 'Arrastra desde donde se lanza el UAV hasta donde llega (línea recta) · con Mover anota el tiempo' },
     enemigo:   { n: 'Enemigo', i: 'fa-user-ninja', aerea: true, pista: 'Toca para marcar enemigos (gris) · sin límite' },
     escape:    { n: 'Zona de escape', i: 'fa-person-running', aerea: true, pista: 'Arrastra en la dirección de la salida: flecha con el texto dentro' },
-    peligro:   { n: 'Zona de peligro', i: 'fa-triangle-exclamation', aerea: true, pista: 'Arrastra para marcar una zona de peligro cuadrada' },
+    peligro:   { n: 'Zona de peligro', i: 'fa-triangle-exclamation', aerea: true, pista: 'Arrastra para marcar la zona · con Mover, estira sus esquinas para hacerla más alta, ancha o chica' },
     lanzadera: { n: 'Lanzadera', i: 'fa-person-falling', pista: 'Arrastra desde la lanzadera hasta donde caes: se dibuja el salto en verde' },
     reposicion: { n: 'Reposición', i: 'fa-feather', pista: 'Punto de reposición (verde, alas de ángel) del tamaño de la caída · con Mover anota el tiempo' },
     binoculares: { n: 'Binoculares', i: 'fa-binoculars', pista: 'Zona amarilla donde los binoculares revelan enemigos (del tamaño de la caída) · con Mover anota el tiempo' },
@@ -276,6 +276,54 @@ class Tablero {
         if (s) p.pausa = s; else delete p.pausa;
         this.cambio();
         return true;
+    }
+
+    // ---------- Ataque sincronizado ----------
+    // Una rotación se identifica como 's:<puesto>' (jugador, vista aérea) o 'e:<equipo>' (mapa)
+    refRuta(o) {
+        return o.t === 'rutaJ' ? 's:' + o.slot : o.t === 'ruta' ? 'e:' + o.eq : null;
+    }
+
+    rutaDeRef(ref) {
+        if (!ref) return null;
+        const [k, v] = [ref.slice(0, 1), ref.slice(2)];
+        return this.doc.objetos.find(o => k === 's' ? o.t === 'rutaJ' && String(o.slot) === v : o.t === 'ruta' && o.eq === v) || null;
+    }
+
+    nombreRef(ref) {
+        if (!ref) return '';
+        return ref[0] === 's' ? this.nombreJugador(Number(ref.slice(2))) : (this.equipo(ref.slice(2)) || {}).nombre || 'Equipo';
+    }
+
+    colorRef(ref) {
+        return ref[0] === 's' ? TB_SLOTS[Number(ref.slice(2))].color : (this.equipo(ref.slice(2)) || {}).color || '#ffffff';
+    }
+
+    // Punto donde una rotación activa el ataque (o su salida/final si no lo marca)
+    puntoAtaque(ref) {
+        const r = this.rutaDeRef(ref);
+        const origen = ref && ref[0] === 's' ? this.jugadorDeSlot(Number(ref.slice(2))) : ref ? this.caidaDe(ref.slice(2)) : null;
+        const logico = [...(origen ? [origen] : []), ...(r ? r.pts : [])];
+        return logico.find(p => /activar ataque/i.test(p.nota || '')) || logico[logico.length - 1] || null;
+    }
+
+    // Rotaciones con las que se puede sincronizar el punto elegido (todas menos la propia)
+    opcionesSync() {
+        const o = this.marcaSeleccionada;
+        if (!o) return [];
+        const propia = o.t === 'jugador' ? (o.slot !== undefined ? 's:' + o.slot : null) : o.t === 'caida' ? 'e:' + o.eq : this.refRuta(o);
+        const refs = this.modo === 'mapa'
+            ? this.doc.equipos.filter(e => this.caidaDe(e.id)).map(e => 'e:' + e.id)
+            : TB_SLOTS.map((x, s) => 's:' + s).filter(r => this.jugadorDeSlot(Number(r.slice(2))));
+        return refs.filter(r => r !== propia).map(r => ({ ref: r, n: this.nombreRef(r) }));
+    }
+
+    ponerSync(ref) {
+        const sel = this.puntoPausa;
+        if (!sel) return;
+        this.instantanea();
+        if (ref) sel.p.sync = ref; else delete sel.p.sync;
+        this.cambio();
     }
 
     // Punto de salida de una rotación: la caída del equipo o el jugador (vista aérea)
@@ -767,18 +815,21 @@ class Tablero {
                 // Cuadrado rojo rayado con aviso en el centro
                 const a = P(o.a), b = P(o.b), col = '#ff3b30';
                 const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
-                c.fillStyle = 'rgba(255, 59, 48, 0.2)';
+                // Intensidad baja para no tapar la imagen
+                c.fillStyle = 'rgba(255, 59, 48, 0.1)';
                 c.fillRect(x, y, w, h);
                 c.save();
                 c.beginPath(); c.rect(x, y, w, h); c.clip();
-                c.globalAlpha = op * 0.35;
+                c.globalAlpha = op * 0.16;
                 c.fillStyle = this._rayas(c, col, k);
                 c.fillRect(x, y, w, h);
                 c.restore();
-                c.strokeStyle = col; c.lineWidth = Math.max(2, k * 3);
-                c.shadowColor = col; c.shadowBlur = k * 8;
+                c.globalAlpha = op * 0.85;
+                c.strokeStyle = col; c.lineWidth = Math.max(1.5, k * 2);
+                c.shadowColor = col; c.shadowBlur = k * 4;
                 c.strokeRect(x, y, w, h);
                 c.shadowBlur = 0;
+                c.globalAlpha = op;
                 const ri = Math.max(9, Math.min(w, h) * 0.18, k * 12);
                 if (w > 18 && h > 18) {
                     c.fillStyle = 'rgba(5, 5, 8, 0.88)';
@@ -879,6 +930,19 @@ class Tablero {
                 c.shadowBlur = 0;
                 this._punta(c, camino[camino.length - 2], camino[camino.length - 1], Math.max(8, k * (esB ? 10 : 13)));
                 if (ataqueDesde >= 0) this._modoAtaque(c, camino, ataqueDesde, k);
+                if (ataqueDesde >= 0 && logico[ataqueDesde].sync && !this._enVideo) {
+                    const otro = this.puntoAtaque(logico[ataqueDesde].sync);
+                    if (otro) {
+                        const a = camino[ataqueDesde], b = P(otro);
+                        c.save();
+                        c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(1.5, k * 2);
+                        c.shadowColor = '#ff3b30'; c.shadowBlur = k * 8;
+                        c.setLineDash([k * 3, k * 5]);
+                        c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+                        c.restore();
+                        this._etiqueta(c, `⚡ SYNC ${this.nombreRef(logico[ataqueDesde].sync).toUpperCase()}`, (a.x + b.x) / 2, (a.y + b.y) / 2, k, '#ff3b30');
+                    }
+                }
                 // Paradas con número (B1, B2… en la ruta B) y tiempo de llegada acumulado
                 const mpu = this.modo === 'mapa' ? metrosPorUnidad(this.mapaActual) : 0;
                 const velR = this.velocidadRuta || TB_VEL_A_PIE;
@@ -1089,6 +1153,12 @@ class Tablero {
         c.fill();
     }
 
+    // Esquinas de un rectángulo (a, b) en orden: arriba-izq, arriba-der, abajo-der, abajo-izq
+    static esquinas(o) {
+        const x1 = Math.min(o.a.x, o.b.x), x2 = Math.max(o.a.x, o.b.x), y1 = Math.min(o.a.y, o.b.y), y2 = Math.max(o.a.y, o.b.y);
+        return [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }];
+    }
+
     // Puntos del arco de un salto de lanzadera (parábola hacia "arriba" en el plano)
     static arcoSalto(a, b, n = 30) {
         const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
@@ -1209,6 +1279,16 @@ class Tablero {
             c.restore();
             return;
         }
+        if (sel.o.t === 'peligro') {
+            c.save();
+            const esq = Tablero.esquinas(sel.o).map(P);
+            c.strokeStyle = '#00f0ff'; c.lineWidth = 1; c.setLineDash([4, 3]);
+            c.beginPath(); esq.forEach((q, i) => i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.closePath(); c.stroke();
+            c.setLineDash([]);
+            esq.forEach(q => { c.fillStyle = '#00f0ff'; c.strokeStyle = '#050508'; c.lineWidth = 2; c.fillRect(q.x - 6, q.y - 6, 12, 12); c.strokeRect(q.x - 6, q.y - 6, 12, 12); });
+            c.restore();
+            return;
+        }
         if (sel.o.t === 'vision') {
             c.save();
             [[Tablero.puntaCono(sel.o), '#00f0ff'], [Tablero.bordeCono(sel.o), '#f5c542']].forEach(([q, col]) => {
@@ -1238,6 +1318,11 @@ class Tablero {
         const cerca = (p, r = tol) => Math.hypot(p.x - l.x, p.y - l.y) < r;
         // Primero los tiradores del cono seleccionado
         const sel = this.seleccion && this.seleccion.o;
+        if (sel && sel.t === 'peligro' && this.doc.objetos.includes(sel)) {
+            const esq = Tablero.esquinas(sel);
+            const i = esq.findIndex(q => cerca(q, 12 / this.k));
+            if (i >= 0) return { o: sel, tirador: 'esquina', fijo: esq[(i + 2) % 4] };
+        }
         if (sel && sel.t === 'vision' && this.doc.objetos.includes(sel)) {
             if (cerca(Tablero.puntaCono(sel), 12 / this.k)) return { o: sel, tirador: 'punta' };
             if (cerca(Tablero.bordeCono(sel), 12 / this.k)) return { o: sel, tirador: 'borde' };
@@ -1371,7 +1456,8 @@ class Tablero {
             this.seleccion = m;
             if (m) {
                 this.instantanea();
-                this.arrastre = m.tirador ? { t: 'cono-' + m.tirador, o: m.o } : { t: 'mover', m, ultimo: l };
+                this.arrastre = m.tirador === 'esquina' ? { t: 'esquina', o: m.o, fijo: m.fijo }
+                    : m.tirador ? { t: 'cono-' + m.tirador, o: m.o } : { t: 'mover', m, ultimo: l };
                 if (m.o.eq && m.o.t === 'caida') this.seleccionarEquipo(m.o.eq);
             } else pan();
             this.dibujar();
@@ -1588,6 +1674,10 @@ class Tablero {
         } else if (a.t === 'cono' || a.t === 'cono-punta') {
             const d = Math.hypot(l.x - a.o.x, l.y - a.o.y);
             if (d > 3) { a.o.ang = Math.atan2(l.y - a.o.y, l.x - a.o.x); a.o.r = Math.max(a.t === 'cono' ? 0 : 15, d); }
+        } else if (a.t === 'esquina') {
+            // Estirar libremente: más alta, más ancha o más chica
+            a.o.a = { ...a.fijo };
+            a.o.b = { x: Math.abs(l.x - a.fijo.x) < 8 ? a.fijo.x + Math.sign(l.x - a.fijo.x || 1) * 8 : l.x, y: Math.abs(l.y - a.fijo.y) < 8 ? a.fijo.y + Math.sign(l.y - a.fijo.y || 1) * 8 : l.y };
         } else if (a.t === 'cono-borde') {
             const dif = Math.abs(difAngulo(Math.atan2(l.y - a.o.y, l.x - a.o.x), a.o.ang));
             a.o.ap = Math.round(Math.min(360, Math.max(10, dif * 360 / Math.PI)));
@@ -1707,6 +1797,32 @@ class Tablero {
             }
             return { o, caida, pts, pasos, real: pasos.reduce((s, p) => s + p.dur, 0) };
         }).filter(r => r.pts.length > 1 && r.real > 0);
+        // Ataque sincronizado: el que llega primero al punto de ataque espera al otro
+        rutas.forEach(r => {
+            r.ref = this.refRuta(r.o);
+            r.jAtk = r.pts.findIndex(p => /activar ataque/i.test(p.nota || ''));
+            if (r.jAtk < 0) return;
+            // Paso justo después de llegar al punto de ataque
+            let n = 0;
+            if (r.jAtk === 0) n = r.caida && r.caida.pausa ? 1 : 0;
+            else n = r.pasos.findIndex(s => s.tipo === 'viaje' && s.b === r.pts[r.jAtk]) + 1;
+            r.idxAtk = n;
+        });
+        const tAtaque = r => r.idxAtk === undefined ? r.real : r.pasos.slice(0, r.idxAtk).reduce((s, p) => s + p.dur, 0);
+        for (let vuelta = 0; vuelta < 3; vuelta++) {
+            rutas.forEach(r => {
+                const pAtk = r.jAtk >= 0 ? r.pts[r.jAtk] : null;
+                if (!pAtk || !pAtk.sync) return;
+                const otra = rutas.find(x => x.ref === pAtk.sync);
+                if (!otra) return;
+                const espera = tAtaque(otra) - tAtaque(r);
+                if (espera < 0.05) return;
+                const nombre = this.nombreRef(pAtk.sync);
+                r.pasos.splice(r.idxAtk, 0, { tipo: 'pausa', dur: espera, p: { ...pAtk, nota: `Espera a ${nombre}`, pausa: espera }, etiqueta: `Espera a ${nombre} para atacar` });
+                r.idxAtk++;
+                r.real += espera;
+            });
+        }
         // Un visor junto a la caída o a una parada se abre cuando el equipo llega ahí
         const llegadas = new Map();
         rutas.forEach(r => {
@@ -1820,7 +1936,7 @@ class Tablero {
             const q = quien(r.o);
             let tr = 0;
             r.pasos.forEach(s => {
-                if (s.tipo === 'pausa') eventos.push({ t0: tr, dur: s.dur, n: q.n, txt: s.p.nota || 'Pausa', color: q.color });
+                if (s.tipo === 'pausa') eventos.push({ t0: tr, dur: s.dur, n: q.n, txt: s.etiqueta || s.p.nota || 'Pausa', color: q.color });
                 tr += s.dur;
             });
             eventos.push({ t0: tr, dur: 0, n: q.n, txt: 'Llega al final', color: q.color });

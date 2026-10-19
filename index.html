@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/moderno.css?v=30">
+    <link rel="stylesheet" href="css/moderno.css?v=31">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -272,6 +272,12 @@
                     <div class="tb-pausa-campos">
                         <input id="tb-pausa-nota" maxlength="24" placeholder="Qué hacen aquí" aria-label="Qué hace el equipo en este punto" oninput="ponerPausaTablero()">
                         <input id="tb-pausa-seg" type="number" min="0" max="900" step="5" placeholder="seg" aria-label="Segundos de pausa" oninput="ponerPausaTablero()">
+                    </div>
+                    <div id="tb-sync" class="tb-sync" hidden>
+                        <label><i class="fa-solid fa-link"></i> Sincronizar ataque con
+                            <select id="tb-sync-sel" onchange="ponerSyncTablero(this.value)" aria-label="Sincronizar ataque con"></select>
+                        </label>
+                        <small id="tb-sync-txt" class="ayuda"></small>
                     </div>
                     <div class="tb-pausa-acciones">
                         <button type="button" onclick="sumarPausa(10)">+10 s</button>
@@ -861,8 +867,8 @@
 <script src="js/db.js?v=15"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=48"></script>
-<script src="js/estrategia.js?v=33"></script>
+<script src="js/tablero.js?v=50"></script>
+<script src="js/estrategia.js?v=34"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=18"></script>
