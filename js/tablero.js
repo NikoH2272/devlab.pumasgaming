@@ -1848,6 +1848,7 @@ class Tablero {
             c.beginPath(); c.rect(0, 0, mapaW, cv.height); c.clip();
             try { this.dibujar(c, vista); }
             finally { c.restore(); this.doc = real; this._exportando = false; this._enVideo = false; }
+            this._marcaMini(c, mapaW, mapaY + mapaH, cv.height);
             this._panelVideo(c, mapaW, cv.width, cv.height, { titulo, reloj: e.reloj, eventos, leyenda });
             if (tiempos.length && t >= finRutas + 2) this._cierreVideo(c, cv.width, cv.height, Math.min(1, (t - finRutas - 2) / 0.6), lugar, tiempos);
             this._rotulos(c, cv.width, cv.height, '', '');
@@ -1879,6 +1880,22 @@ class Tablero {
     }
 
     // Leyenda abajo a la izquierda: qué significa cada punto especial del plano
+    // Marca de agua pequeña y semitransparente en la esquina del mapa
+    _marcaMini(c, xDer, yAbajo, H) {
+        c.save();
+        const t = Math.round(H * 0.014), m = Math.round(H * 0.016);
+        c.globalAlpha = 0.6;
+        c.textBaseline = 'middle'; c.textAlign = 'right';
+        c.font = `700 ${t}px ${TB_FUENTE}`;
+        c.shadowColor = 'rgba(0, 0, 0, 0.9)'; c.shadowBlur = t * 0.5;
+        c.fillStyle = '#ffffff';
+        c.fillText(TB_CREADOR.usuario, xDer - m, yAbajo - m - t / 2);
+        const ancho = c.measureText(TB_CREADOR.usuario).width;
+        c.font = `400 ${t * 1.15}px "Font Awesome 6 Brands"`;
+        c.fillText('', xDer - m - ancho - t * 0.45, yAbajo - m - t / 2);
+        c.restore();
+    }
+
     // Qué se explica en la leyenda del panel del video
     _leyendaPanel() {
         const items = [];
