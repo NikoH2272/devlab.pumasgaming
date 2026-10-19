@@ -33,7 +33,7 @@ const TB_HERRAMIENTAS = {
     rutaJ:    { n: 'Rotación jugador', i: 'fa-person-walking-arrow-right', aerea: true, pista: 'Elige el jugador en el panel y toca las paradas: la rotación sale de donde está' },
     rutaB:    { n: 'Ruta B',        i: 'fa-code-branch',   mapa: true, pista: 'Rotación alterna (plan B) del equipo elegido · sale de la caída, igual que la principal' },
     medir:    { n: 'Medir',         i: 'fa-ruler',         mapa: true, pista: 'Arrastra entre dos puntos: distancia real y tiempo a pie y en vehículo' },
-    uav:       { n: 'UAV', i: 'fa-satellite', aerea: true, pista: 'Toca donde se lanza el UAV y arrastra el radio que escanea · con Mover anota el tiempo' },
+    uav:       { n: 'UAV', i: 'fa-satellite', aerea: true, pista: 'Arrastra desde donde se lanza el UAV hasta donde llega (línea recta) · con Mover anota el tiempo' },
     enemigo:   { n: 'Enemigo', i: 'fa-user-ninja', aerea: true, pista: 'Toca para marcar enemigos (gris) · sin límite' },
     escape:    { n: 'Zona de escape', i: 'fa-person-running', aerea: true, pista: 'Arrastra en la dirección de la salida: flecha con el texto dentro' },
     peligro:   { n: 'Zona de peligro', i: 'fa-triangle-exclamation', aerea: true, pista: 'Arrastra para marcar una zona de peligro cuadrada' },
@@ -684,38 +684,42 @@ class Tablero {
                 break;
             }
             case 'uav': {
-                // Lanzamiento de UAV: zona de escaneo morada con anillos de radar
-                const p = P(o), r = o.r * k, col = TB_UAV;
-                const g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-                g.addColorStop(0, 'rgba(168, 85, 247, 0.35)');
-                g.addColorStop(1, 'rgba(168, 85, 247, 0.08)');
-                c.fillStyle = g;
-                c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.fill();
-                if (o._pulso !== undefined) {
-                    // Barrido de radar girando
-                    const a0 = o._pulso * Math.PI * 2 - Math.PI / 2;
-                    const gb = c.createConicGradient ? c.createConicGradient(a0 - 0.9, p.x, p.y) : null;
-                    if (gb) { gb.addColorStop(0, 'rgba(168, 85, 247, 0)'); gb.addColorStop(0.14, 'rgba(216, 180, 254, 0.55)'); gb.addColorStop(0.15, 'rgba(168, 85, 247, 0)'); gb.addColorStop(1, 'rgba(168, 85, 247, 0)'); c.fillStyle = gb; }
-                    else c.fillStyle = 'rgba(216, 180, 254, 0.35)';
-                    c.beginPath(); c.moveTo(p.x, p.y); c.arc(p.x, p.y, r, a0 - 0.9, a0); c.closePath(); c.fill();
+                // UAV: como la lanzadera pero en línea recta, del lanzamiento al punto que sobrevuela
+                const col = TB_UAV;
+                const A = o.a || { x: o.x, y: o.y }, B = o.b || { x: o.x + (o.r || 70), y: o.y };
+                const a = P(A), bFin = P(B);
+                const av = o._avance ?? 1;
+                const b = { x: a.x + (bFin.x - a.x) * av, y: a.y + (bFin.y - a.y) * av };
+                c.strokeStyle = col; c.fillStyle = col;
+                c.lineWidth = Math.max(2, k * 3.5);
+                c.shadowColor = col; c.shadowBlur = k * 8;
+                c.setLineDash([k * 10, k * 6]);
+                c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+                c.setLineDash([]); c.shadowBlur = 0;
+                if (Math.hypot(b.x - a.x, b.y - a.y) > 6) this._punta(c, a, b, Math.max(8, k * 12));
+                // Punto de llegada: anillo y, en el video, pulso de radar
+                if (av >= 1) {
+                    const rr = Math.max(6, k * 9);
+                    c.fillStyle = 'rgba(168, 85, 247, 0.35)';
+                    c.beginPath(); c.arc(b.x, b.y, rr, 0, 7); c.fill();
+                    c.lineWidth = Math.max(1.5, k * 2); c.stroke();
+                    if (o._pulso !== undefined) {
+                        c.globalAlpha = op * (1 - o._pulso);
+                        c.beginPath(); c.arc(b.x, b.y, rr * (1 + o._pulso * 2.5), 0, 7); c.stroke();
+                        c.globalAlpha = op;
+                    }
+                    if (o._resta !== undefined && o.pausa) {
+                        c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(2, k * 3);
+                        c.beginPath(); c.arc(b.x, b.y, rr + Math.max(4, k * 5), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (o._resta / o.pausa)); c.stroke();
+                    }
                 }
-                c.strokeStyle = col; c.lineWidth = Math.max(1, k * 1.2);
-                c.setLineDash([k * 4, k * 4]);
-                [0.33, 0.66].forEach(f => { c.beginPath(); c.arc(p.x, p.y, r * f, 0, 7); c.stroke(); });
-                c.setLineDash([]);
-                c.lineWidth = Math.max(2, k * 3); c.shadowColor = col; c.shadowBlur = k * 8;
-                c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.stroke();
-                c.shadowBlur = 0;
-                const ri = Math.max(10, k * 13);
-                c.fillStyle = 'rgba(5, 5, 8, 0.9)';
-                c.beginPath(); c.arc(p.x, p.y, ri, 0, 7); c.fill();
-                c.strokeStyle = col; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
-                this._icono(c, '\uf7bf', p.x, p.y, ri * 1.05, '#d8b4fe');
-                if (o._resta !== undefined && o.pausa) {
-                    c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(2, k * 3);
-                    c.beginPath(); c.arc(p.x, p.y, ri + Math.max(4, k * 5), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (o._resta / o.pausa)); c.stroke();
-                }
-                if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), p.x, p.y - ri - 2, k, col,
+                // Lanzamiento
+                const ri = Math.max(9, k * 13);
+                c.fillStyle = '#050508';
+                c.beginPath(); c.arc(a.x, a.y, ri, 0, 7); c.fill();
+                c.strokeStyle = col; c.lineWidth = Math.max(2, k * 2.6); c.stroke();
+                this._icono(c, '', a.x, a.y, ri * 1.05, '#d8b4fe');
+                if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), a.x, a.y - ri - 2, k, col,
                     o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
                 break;
             }
@@ -1113,7 +1117,7 @@ class Tablero {
 
     _caja(o) {
         switch (o.t) {
-            case 'rect': case 'elipse': case 'linea': case 'flecha': case 'medida': case 'lanzadera': case 'peligro': case 'escape':
+            case 'rect': case 'elipse': case 'linea': case 'flecha': case 'medida': case 'lanzadera': case 'peligro': case 'escape': case 'uav':
                 return { x1: Math.min(o.a.x, o.b.x), y1: Math.min(o.a.y, o.b.y), x2: Math.max(o.a.x, o.b.x), y2: Math.max(o.a.y, o.b.y) };
             case 'trazo': {
                 const xs = o.pts.map(p => p.x), ys = o.pts.map(p => p.y);
@@ -1125,7 +1129,7 @@ class Tablero {
                 const w = this.cx.measureText(o.txt).width;
                 return { x1: o.x, y1: o.y, x2: o.x + w, y2: o.y + (o.s || 18) };
             }
-            case 'caliente': case 'segura': case 'uav': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
+            case 'caliente': case 'segura': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
             case 'vision': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
             case 'binoculares': case 'reposicion': return { x1: o.x - 20, y1: o.y - 20, x2: o.x + 20, y2: o.y + 20 };
             default: {
@@ -1196,7 +1200,8 @@ class Tablero {
                     break;
                 }
                 case 'segura': if (Math.abs(Math.hypot(o.x - l.x, o.y - l.y) - o.r) < tol) return { o }; break;
-                case 'caliente': case 'uav': if (cerca(o, o.r)) return { o }; break;
+                case 'caliente': if (cerca(o, o.r)) return { o }; break;
+                case 'uav': if (o.a && (cerca(o.a, 16 / this.k) || distSegmento(l, o.a, o.b) < tol)) return { o }; break;
                 case 'vision': {
                     if (cerca(o, 16 / this.k)) return { o };
                     const dif = difAngulo(Math.atan2(l.y - o.y, l.x - o.x), o.ang);
@@ -1270,7 +1275,7 @@ class Tablero {
             const a = this.arrastre;
             this.arrastre = null;
             // Formas demasiado pequeñas: se descartan (fue un clic, no un trazo)
-            if (a.nuevo && ['rect', 'elipse', 'linea', 'flecha', 'medida', 'lanzadera', 'peligro', 'escape'].includes(a.nuevo.t)
+            if (a.nuevo && ['rect', 'elipse', 'linea', 'flecha', 'medida', 'lanzadera', 'peligro', 'escape', 'uav'].includes(a.nuevo.t)
                 && Math.hypot(a.nuevo.b.x - a.nuevo.a.x, a.nuevo.b.y - a.nuevo.a.y) < 6) {
                 this.doc.objetos = this.doc.objetos.filter(o => o !== a.nuevo);
                 this.historial.pop();
@@ -1365,8 +1370,8 @@ class Tablero {
             return;
         }
         if (h === 'uav') {
-            const o = agregar({ t: 'uav', x: l.x, y: l.y, r: 70 });
-            this.arrastre = { t: 'radio', o, min: 20 };
+            const o = agregar({ t: 'uav', a: l, b: { ...l } });
+            this.arrastre = { t: 'forma', nuevo: o };
             this.seleccion = { o };
             this.dibujar();
             this.alSeleccionar(this.seleccion);
@@ -1654,7 +1659,7 @@ class Tablero {
         objs.filter(o => o.t === 'vision' || tbPulso(o.t)).forEach(v => {
             let mejor = null;
             llegadas.forEach((tr, p) => {
-                const d = Math.hypot(p.x - v.x, p.y - v.y);
+                const d = Math.hypot(p.x - (v.a || v).x, p.y - (v.a || v).y);
                 if (d < 40 && (!mejor || d < mejor.d)) mejor = { d, tr };
             });
             if (mejor) visores.set(v, mejor.tr);
@@ -1704,10 +1709,10 @@ class Tablero {
                     lista.push(v);
                     return;
                 }
-                if (o.t === 'uav' && !o.pausa) { lista.push({ ...o, op: (o.op ?? 1) * a, _pulso: ((t - t0) / 2) % 1 }); return; }
+                if (o.t === 'uav' && !o.pausa) { lista.push({ ...o, op: (o.op ?? 1) * a, _avance: Math.min(1, (t - t0) / 0.9), _pulso: ((t - t0) / 1.4) % 1 }); return; }
                 if (tbPulso(o.t) && o.pausa) {
                     const restaB = Math.max(0, o.pausa - (reloj ?? 0));
-                    lista.push({ ...o, op: (o.op ?? 1) * a * (restaB ? 1 : 0.45), _resta: restaB, ...(restaB ? { _pulso: ((t - t0) / 1.4) % 1 } : {}) });
+                    lista.push({ ...o, op: (o.op ?? 1) * a * (restaB ? 1 : 0.45), _resta: restaB, _avance: Math.min(1, (t - t0) / 0.9), ...(restaB ? { _pulso: ((t - t0) / 1.4) % 1 } : {}) });
                     return;
                 }
                 if (o.t === 'jugador' && reloj !== null && rutas.some(r => r.caida === o)) return;
@@ -1725,7 +1730,7 @@ class Tablero {
             if (reloj !== null) visores.forEach((tr, o) => {
                 if (reloj < tr) return;
                 const e = Math.min(1, (reloj - tr) * escala / 0.9), suave = 1 - (1 - e) ** 3;
-                const v = tbPulso(o.t) ? { ...o, op: (o.op ?? 1) * suave, _pulso: ((reloj - tr) * escala / 1.4) % 1 }
+                const v = tbPulso(o.t) ? { ...o, op: (o.op ?? 1) * suave, _avance: e, _pulso: ((reloj - tr) * escala / 1.4) % 1 }
                     : { ...o, r: o.r * suave, ap: Math.max(1, o.ap * suave), _barrido: ((reloj - tr) * escala / 2.4) % 1 };
                 if (o.pausa) {
                     v._resta = Math.max(0, o.pausa - (reloj - tr));
@@ -1773,7 +1778,7 @@ class Tablero {
         return this.doc.objetos.some(o => {
             if (!(o.t === 'ruta' || o.t === 'rutaB' || o.t === 'rutaJ')) return false;
             const caida = this.origenRuta(o);
-            return [...(caida ? [caida] : []), ...o.pts].some(p => Math.hypot(p.x - v.x, p.y - v.y) < 40);
+            return [...(caida ? [caida] : []), ...o.pts].some(p => Math.hypot(p.x - (v.a || v).x, p.y - (v.a || v).y) < 40);
         });
     }
 
