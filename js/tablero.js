@@ -99,6 +99,9 @@ const TB_ENEMIGO = '#9ca3af';
 const TB_UAV = '#a855f7';
 // Marcas que en el video se abren al llegar el equipo y laten mientras dura su tiempo
 const tbPulso = t => !!TB_PUNTOS[t] || t === 'uav';
+// Marcas que se explican en la leyenda de la esquina (sin nombre encima)
+const TB_ESPECIALES = ['binoculares', 'reposicion', 'uav'];
+const tbEspecial = t => t === 'uav' ? { col: TB_UAV, rgb: '168, 85, 247', glifo: '\uf7bf', ley: 'Lanzamiento de UAV' } : TB_PUNTOS[t];
 
 // Zona caliente: intensidad 1 baja · 2 media · 3 alta
 const TB_CALOR = {
@@ -434,7 +437,11 @@ class Tablero {
         const orden = ['caliente', 'uav', 'peligro', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'lanzadera', 'escape', 'rutaB', 'ruta', 'rutaJ', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'enemigo', 'jugador', 'texto'];
         const objs = [...this.doc.objetos].sort((a, b) => orden.indexOf(a.t) - orden.indexOf(b.t));
         objs.forEach(o => this._objeto(c, o, P, k));
-        if (this.modo !== 'mapa') this._leyendaJugadores(c, OX, OY, L, A, k);
+        if (!this._enVideo) {
+            if (this.modo !== 'mapa') this._leyendaJugadores(c, OX, OY, L, A, k);
+            const tipos = TB_ESPECIALES.filter(t => this.doc.objetos.some(o => o.t === t));
+            if (tipos.length) this._leyendaEsquina(c, OX + Math.max(6, k * 10), OY + A - Math.max(6, k * 10), Math.max(9, k * 10), tipos);
+        }
 
         if (!exportar && this.seleccion) this._marcoSeleccion(c, this.seleccion, P, k);
     }
@@ -473,6 +480,7 @@ class Tablero {
     }
 
     _cartel(c, texto, x, y, k, color, progreso = null) {
+        if (this._enVideo) return;   // en el video los tiempos se leen en el panel de la derecha
         c.save();
         c.globalAlpha = 1;
         const t = Math.max(9, k * 9.5);
@@ -707,7 +715,6 @@ class Tablero {
                     c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(2, k * 3);
                     c.beginPath(); c.arc(p.x, p.y, ri + Math.max(4, k * 5), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (o._resta / o.pausa)); c.stroke();
                 }
-                this._etiqueta(c, 'LANZAMIENTO UAV', p.x, p.y + r + Math.max(10, k * 12), k, col);
                 if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), p.x, p.y - ri - 2, k, col,
                     o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
                 break;
@@ -825,7 +832,7 @@ class Tablero {
             case 'rutaB':
             case 'rutaJ': {
                 const eq = o.t === 'rutaJ' ? { color: TB_SLOTS[o.slot].color } : this.equipo(o.eq);
-                const caida = this.origenRuta(o);
+                const caida = o._origen || this.origenRuta(o);
                 const logico = caida ? [caida, ...o.pts] : o.pts;
                 const camino = logico.map(P);
                 if (!eq || camino.length < 2) break;
@@ -964,7 +971,6 @@ class Tablero {
                     c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(2, k * 3);
                     c.beginPath(); c.arc(p.x, p.y, R + Math.max(4, k * 6), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (o._resta / o.pausa)); c.stroke();
                 }
-                this._etiqueta(c, tipo.n, p.x, p.y + R + Math.max(10, k * 12), k, col);
                 if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), p.x, p.y - R - 2, k, col,
                     o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
                 break;
@@ -1394,6 +1400,8 @@ class Tablero {
         }
         if (h === 'vision') {
             const o = agregar({ t: 'vision', x: l.x, y: l.y, ang: -Math.PI / 2, r: 0, ap: this.estilo.apertura, color });
+            this.seleccion = { o };
+            this.alSeleccionar(this.seleccion);
             this.arrastre = { t: 'cono', o };
             this.dibujar();
             return;
@@ -1729,14 +1737,35 @@ class Tablero {
                 const parte = avance(r, reloj);
                 // El punto donde está detenido no repite su cartel (lo lleva el escudo con la cuenta atrás)
                 const pts = (r.caida ? parte.pts.slice(1) : parte.pts).map(p => parte.pausa && p === parte.pausa.p ? { x: p.x, y: p.y } : p);
-                if (pts.length) lista.push({ ...r.o, pts });
+                if (pts.length) lista.push({ ...r.o, pts, _origen: r.caida ? { x: r.pts[0].x, y: r.pts[0].y, pausa: r.pts[0].pausa } : null });
                 if (!parte.completa) cabezas.push(parte.cabeza);
                 if (r.caida && r.caida.t === 'jugador') lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _pausa: parte.pausa || null, _sinCartel: true });
                 else if (!parte.completa && r.caida) lista.push({ ...r.caida, x: parte.cabeza.x, y: parte.cabeza.y, _movil: true, _pausa: parte.pausa || null });
             });
             return { objetos: lista, reloj, cabezas };
         };
-        return { total, estado, finRutas, tiempos };
+        // Línea de tiempo de pausas (jugadores/equipos) y tiempos activos (visor, binoculares, UAV…)
+        const quien = o => {
+            if (o.t === 'rutaJ') return { n: this.nombreJugador(o.slot), color: TB_SLOTS[o.slot].color };
+            const eq = this.equipo(o.eq);
+            return { n: (eq ? eq.nombre : 'Equipo') + (o.t === 'rutaB' ? ' (B)' : ''), color: eq ? eq.color : '#00f0ff' };
+        };
+        const eventos = [];
+        rutas.forEach(r => {
+            const q = quien(r.o);
+            let tr = 0;
+            r.pasos.forEach(s => {
+                if (s.tipo === 'pausa') eventos.push({ t0: tr, dur: s.dur, n: q.n, txt: s.p.nota || 'Pausa', color: q.color });
+                tr += s.dur;
+            });
+            eventos.push({ t0: tr, dur: 0, n: q.n, txt: 'Llega al final', color: q.color });
+        });
+        const NOMBRES = { vision: 'Visor', binoculares: 'Binoculares', reposicion: 'Reposición', uav: 'UAV' };
+        objs.filter(o => (o.t === 'vision' || tbPulso(o.t)) && o.pausa).forEach(o => {
+            eventos.push({ t0: visores.has(o) ? visores.get(o) : 0, dur: o.pausa, n: NOMBRES[o.t], txt: o.nota || 'Activo', color: o.t === 'vision' ? o.color : tbEspecial(o.t).col });
+        });
+        eventos.sort((a, b) => a.t0 - b.t0 || b.dur - a.dur);
+        return { total, estado, finRutas, tiempos, eventos };
     }
 
     // ¿Este visor está junto a la caída o a una parada de alguna rotación?
@@ -1752,22 +1781,25 @@ class Tablero {
     // hd = false → 1080 px, 30 fps, ~4 Mbps: liviano y compatible con WhatsApp
     // hd = true  → 1920 px, 60 fps, alta tasa: máxima calidad
     grabarVideo({ hd = false, titulo = '', alProgreso = () => {} } = {}) {
-        const ancho = hd ? 1920 : 1080, fps = hd ? 60 : 30;
+        // 16:9 — el mapa a la izquierda y el informe de datos a la derecha
+        const fps = hd ? 60 : 30;
         if (typeof MediaRecorder === 'undefined') return Promise.reject(new Error('Este navegador no puede grabar video.'));
         const cv = document.createElement('canvas');
-        cv.width = ancho - ancho % 2;
-        cv.height = Math.round(cv.width * this.doc.alto / TB_ANCHO / 2) * 2;
+        cv.height = hd ? 1440 : 1080;
+        cv.width = Math.round(cv.height * 16 / 9);
         const c = cv.getContext('2d');
-        const k = cv.width / TB_ANCHO;
+        const mapaW = Math.round(Math.min(cv.height * TB_ANCHO / this.doc.alto, cv.width * 0.64) / 2) * 2;
+        const mapaH = mapaW * this.doc.alto / TB_ANCHO, mapaY = (cv.height - mapaH) / 2;
+        const k = mapaW / TB_ANCHO;
         // Full HD a 60 fps: H.264 High (nivel 5.1) si el navegador lo tiene; si no, el siguiente que pueda
         const tipos = hd
             ? ['video/mp4;codecs=avc1.640033', 'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
             : ['video/mp4;codecs=avc1.4D4028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
         const tipo = tipos.find(t => MediaRecorder.isTypeSupported(t));
         if (!tipo) return Promise.reject(new Error('Este navegador no puede grabar video.'));
-        const { total, estado, finRutas, tiempos } = this._guionVideo();
+        const { total, estado, finRutas, tiempos, eventos } = this._guionVideo();
         const lugar = this.modo === 'mapa' ? this.mapaActual.toUpperCase() : 'VISTA AÉREA';
-        const leyenda = Object.keys(TB_PUNTOS).filter(t => this.doc.objetos.some(o => o.t === t));
+        const leyenda = this._leyendaPanel();
         try { document.fonts.load(`400 20px "Font Awesome 6 Brands"`); } catch (e) {}
         const real = this.doc;
 
@@ -1784,13 +1816,14 @@ class Tablero {
                 cam.y = salida.y + (alto / 2 - salida.y) * s;
                 cam.z = salida.z + (1 - salida.z) * s;
                 const kk = k * cam.z;
-                return { k: kk, W: cv.width, H: cv.height, ox: cv.width / 2 - cam.x * kk, oy: cv.height / 2 - cam.y * kk };
+                return { k: kk, W: mapaW, H: cv.height, ox: mapaW / 2 - cam.x * kk, oy: mapaY + mapaH / 2 - cam.y * kk };
             }
             let obj = { x: TB_ANCHO / 2, y: alto / 2, z: 1 };
             if (e.cabezas.length) {
-                const xs = e.cabezas.map(p => p.x), ys = e.cabezas.map(p => p.y), mg = 150;
+                // Zoom suave (máx. 1.6×) para que siempre se vea el entorno
+                const xs = e.cabezas.map(p => p.x), ys = e.cabezas.map(p => p.y), mg = 260;
                 const x1 = Math.min(...xs) - mg, x2 = Math.max(...xs) + mg, y1 = Math.min(...ys) - mg, y2 = Math.max(...ys) + mg;
-                obj = { x: (x1 + x2) / 2, y: (y1 + y2) / 2, z: Math.max(1, Math.min(2.6, TB_ANCHO / (x2 - x1), alto / (y2 - y1))) };
+                obj = { x: (x1 + x2) / 2, y: (y1 + y2) / 2, z: Math.max(1, Math.min(1.6, TB_ANCHO / (x2 - x1), alto / (y2 - y1))) };
             }
             const dt = Math.max(0, t - tPrevio);
             tPrevio = t;
@@ -1803,24 +1836,26 @@ class Tablero {
             cam.x = Math.max(mw, Math.min(TB_ANCHO - mw, cam.x));
             cam.y = Math.max(mh, Math.min(alto - mh, cam.y));
             const kk = k * cam.z;
-            return { k: kk, W: cv.width, H: cv.height, ox: cv.width / 2 - cam.x * kk, oy: cv.height / 2 - cam.y * kk };
+            return { k: kk, W: mapaW, H: cv.height, ox: mapaW / 2 - cam.x * kk, oy: mapaY + mapaH / 2 - cam.y * kk };
         };
 
         const cuadro = t => {
             const e = estado(t);
             const vista = camara(e, t);
             this.doc = { ...real, objetos: e.objetos };
-            this._exportando = true;
+            this._exportando = true; this._enVideo = true;
+            c.save();
+            c.beginPath(); c.rect(0, 0, mapaW, cv.height); c.clip();
             try { this.dibujar(c, vista); }
-            finally { this.doc = real; this._exportando = false; }
-            if (leyenda.length) this._leyendaVideo(c, cv.width, cv.height, leyenda);
+            finally { c.restore(); this.doc = real; this._exportando = false; this._enVideo = false; }
+            this._panelVideo(c, mapaW, cv.width, cv.height, { titulo, reloj: e.reloj, eventos, leyenda });
             if (tiempos.length && t >= finRutas + 2) this._cierreVideo(c, cv.width, cv.height, Math.min(1, (t - finRutas - 2) / 0.6), lugar, tiempos);
-            this._rotulos(c, cv.width, cv.height, titulo, e.reloj !== null ? `ROTACIÓN ${relojTxt(e.reloj)}` : '');
+            this._rotulos(c, cv.width, cv.height, '', '');
         };
 
         return new Promise((resolve, reject) => {
             const flujo = cv.captureStream(fps);
-            const rec = new MediaRecorder(flujo, { mimeType: tipo, videoBitsPerSecond: hd ? Math.round(cv.width * cv.height * fps * 0.06) : 4e6 });
+            const rec = new MediaRecorder(flujo, { mimeType: tipo, videoBitsPerSecond: hd ? Math.round(cv.width * cv.height * fps * 0.05) : 6e6 });
             const trozos = [];
             rec.ondataavailable = ev => { if (ev.data.size) trozos.push(ev.data); };
             rec.onerror = ev => reject(ev.error || new Error('Falló la grabación'));
@@ -1844,19 +1879,130 @@ class Tablero {
     }
 
     // Leyenda abajo a la izquierda: qué significa cada punto especial del plano
-    _leyendaVideo(c, W, H, tipos) {
+    // Qué se explica en la leyenda del panel del video
+    _leyendaPanel() {
+        const items = [];
+        const hay = t => this.doc.objetos.some(o => o.t === t);
+        if (this.modo !== 'mapa') TB_SLOTS.forEach((x, s) => { if (this.jugadorDeSlot(s)) items.push({ color: x.color, n: this.nombreJugador(s) }); });
+        else this.doc.equipos.filter(e => this.caidaDe(e.id)).forEach(e => items.push({ color: e.color, n: e.nombre }));
+        if (hay('enemigo')) items.push({ color: TB_ENEMIGO, n: 'Enemigos' });
+        TB_ESPECIALES.filter(hay).forEach(t => items.push({ especial: t, color: tbEspecial(t).col, n: tbEspecial(t).ley }));
+        if (hay('peligro')) items.push({ cuadro: true, color: '#ff3b30', n: 'Zona de peligro' });
+        if (hay('caliente')) items.push({ color: '#ff8a3d', n: 'Zona caliente' });
+        if (hay('escape')) items.push({ cuadro: true, color: '#22c55e', n: 'Zona de escape' });
+        return items;
+    }
+
+    // Informe de datos a la derecha del video: reloj, pausas en curso, eventos y leyenda
+    _panelVideo(c, x0, W, H, d) {
+        const P = W - x0, u = H / 100, pad = Math.max(u * 2.4, P * 0.06);
+        const x = x0 + pad, w = P - pad * 2;
         c.save();
-        const t = Math.round(H * 0.017), m = Math.round(H * 0.018), fila = t * 2.3, ic = t * 0.85, pad = t * 0.7;
+        c.fillStyle = '#07080c'; c.fillRect(x0, 0, P, H);
+        c.fillStyle = '#00f0ff'; c.fillRect(x0, 0, Math.max(2, u * 0.3), H);
+        c.textBaseline = 'top';
+        const letra = (tam, peso = 700) => { c.font = `${peso} ${tam}px ${TB_FUENTE}`; };
+        const recortar = (s, max) => { s = String(s); if (c.measureText(s).width <= max) return s; while (s.length > 1 && c.measureText(s + '…').width > max) s = s.slice(0, -1); return s + '…'; };
+        const titulo = (s, y) => {
+            letra(u * 1.5); c.fillStyle = '#00f0ff'; c.textAlign = 'left'; c.fillText(s, x, y);
+            c.fillStyle = 'rgba(0, 240, 255, 0.25)'; c.fillRect(x, y + u * 2.2, w, 1);
+            return y + u * 3.2;
+        };
+        let y = pad;
+        // Encabezado
+        letra(u * 1.4); c.fillStyle = '#9ca3af'; c.textAlign = 'left'; c.fillText('INFORME DE ROTACIÓN', x, y);
+        y += u * 2.4;
+        let tt = u * 2.6; letra(tt, 900);
+        while (c.measureText(d.titulo).width > w && tt > u * 1.4) { tt -= 1; letra(tt, 900); }
+        c.fillStyle = '#ffffff'; c.fillText(recortar(d.titulo, w), x, y);
+        y += tt + u * 1.8;
+        // Reloj
+        c.fillStyle = 'rgba(0, 240, 255, 0.07)'; c.fillRect(x, y, w, u * 7.5);
+        c.strokeStyle = 'rgba(0, 240, 255, 0.35)'; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, w - 1, u * 7.5 - 1);
+        letra(u * 1.3); c.fillStyle = '#9ca3af'; c.fillText('TIEMPO DE JUEGO', x + u * 1.2, y + u * 1.2);
+        letra(u * 4, 900); c.fillStyle = '#ffffff'; c.textAlign = 'right';
+        c.fillText(relojTxt(d.reloj || 0), x + w - u * 1.2, y + u * 1.8);
+        c.textAlign = 'left';
+        y += u * 9.5;
+        const r = d.reloj ?? -1;
+        // Pausas en curso
+        y = titulo('EN CURSO', y);
+        const activos = d.eventos.filter(e => e.dur > 0 && r >= e.t0 && r < e.t0 + e.dur).slice(0, 4);
+        if (!activos.length) { letra(u * 1.5, 500); c.fillStyle = '#6b7280'; c.fillText(r < 0 ? 'La rotación aún no empieza' : 'Sin pausas activas', x, y); y += u * 3; }
+        activos.forEach(e => {
+            const resta = e.t0 + e.dur - r, f = resta / e.dur;
+            c.fillStyle = 'rgba(255, 255, 255, 0.04)'; c.fillRect(x, y, w, u * 6);
+            c.fillStyle = e.color; c.fillRect(x, y, Math.max(3, u * 0.45), u * 6);
+            letra(u * 1.8, 800); c.fillStyle = '#ffffff';
+            c.fillText(recortar(`${e.n} · ${e.txt}`.toUpperCase(), w - u * 9), x + u * 1.4, y + u * 1);
+            letra(u * 2.2, 900); c.fillStyle = e.color; c.textAlign = 'right'; c.fillText(relojTxt(resta), x + w - u * 1, y + u * 0.9); c.textAlign = 'left';
+            c.fillStyle = 'rgba(255, 255, 255, 0.1)'; c.fillRect(x + u * 1.4, y + u * 4.2, w - u * 2.4, u * 0.7);
+            c.fillStyle = e.color; c.fillRect(x + u * 1.4, y + u * 4.2, (w - u * 2.4) * f, u * 0.7);
+            y += u * 7;
+        });
+        y += u * 1;
+        // Leyenda (abajo, encima de la marca de agua)
+        const filaL = u * 3, altoLeyenda = d.leyenda.length ? u * 3.2 + Math.ceil(d.leyenda.length / 2) * filaL : 0;
+        const finEventos = H - u * 9 - altoLeyenda - u * 2;
+        // Eventos
+        if (d.eventos.length) {
+            y = titulo('EVENTOS', y);
+            const fila = u * 3.4, cupo = Math.max(1, Math.floor((finEventos - y) / fila));
+            const hechos = e => r >= e.t0 + e.dur && (e.dur > 0 || r >= e.t0);
+            const primero = Math.max(0, d.eventos.findIndex(e => !hechos(e)) - 1);
+            const ini = Math.min(primero < 0 ? 0 : primero, Math.max(0, d.eventos.length - cupo));
+            d.eventos.slice(ini, ini + cupo).forEach(e => {
+                const hecho = hechos(e), activo = e.dur > 0 && r >= e.t0 && r < e.t0 + e.dur;
+                letra(u * 1.45, 700); c.fillStyle = activo ? '#00f0ff' : '#6b7280'; c.fillText(relojTxt(e.t0), x, y + u * 0.3);
+                c.fillStyle = e.color; c.beginPath(); c.arc(x + u * 7.4, y + u * 1.1, u * 0.6, 0, 7); c.fill();
+                letra(u * 1.5, activo ? 800 : 600);
+                c.fillStyle = hecho ? '#6b7280' : '#ffffff';
+                const txt = `${e.n} · ${e.txt}${e.dur ? ' · ' + relojTxt(e.dur) : ''}`;
+                c.fillText(recortar(txt, w - u * 12), x + u * 8.6, y + u * 0.3);
+                if (hecho) { c.fillStyle = '#4ade80'; c.textAlign = 'right'; c.fillText('✓', x + w, y + u * 0.3); c.textAlign = 'left'; }
+                else if (activo) { c.fillStyle = '#00f0ff'; c.textAlign = 'right'; c.fillText('●', x + w, y + u * 0.3); c.textAlign = 'left'; }
+                y += fila;
+            });
+        }
+        if (d.leyenda.length) {
+            let yl = H - u * 9 - altoLeyenda;
+            yl = titulo('LEYENDA', yl);
+            d.leyenda.forEach((it, i) => {
+                const cx = x + (i % 2) * (w / 2), cy = yl + Math.floor(i / 2) * filaL + u * 1.1;
+                const ic = u * 0.95;
+                if (it.especial) {
+                    const e = tbEspecial(it.especial);
+                    c.fillStyle = `rgba(${e.rgb}, 0.38)`; c.beginPath(); c.arc(cx + ic, cy, ic, 0, 7); c.fill();
+                    c.strokeStyle = e.col; c.lineWidth = Math.max(1.5, u * 0.15); c.stroke();
+                    if (e.alas) this._alas(c, cx + ic, cy + ic * 0.1, ic * 0.55, e.col);
+                    else this._icono(c, e.glifo, cx + ic, cy, ic * 0.95, e.col);
+                } else if (it.cuadro) {
+                    c.fillStyle = it.color; c.fillRect(cx, cy - ic, ic * 2, ic * 2);
+                } else {
+                    c.fillStyle = it.color; c.beginPath(); c.arc(cx + ic, cy, ic, 0, 7); c.fill();
+                }
+                letra(u * 1.35, 700); c.fillStyle = '#ffffff'; c.textBaseline = 'middle';
+                c.fillText(recortar(it.n.toUpperCase(), w / 2 - ic * 2 - u * 1.6), cx + ic * 2 + u * 0.8, cy + 0.5);
+                c.textBaseline = 'top';
+            });
+        }
+        c.restore();
+    }
+
+    // Leyenda en una esquina (abajo a la izquierda): qué significa cada marca especial
+    _leyendaEsquina(c, x0, yAbajo, t, tipos) {
+        c.save();
+        const fila = t * 2.3, ic = t * 0.85, pad = t * 0.7;
         c.font = `700 ${t}px ${TB_FUENTE}`;
-        const w = pad * 2 + ic * 2 + pad + Math.max(...tipos.map(x => c.measureText(TB_PUNTOS[x].ley.toUpperCase()).width));
+        const w = pad * 2 + ic * 2 + pad + Math.max(...tipos.map(x => c.measureText(tbEspecial(x).ley.toUpperCase()).width));
         const h = pad * 2 + fila * tipos.length - (fila - ic * 2);
-        const x0 = m, y0 = H - m - h;
+        const y0 = yAbajo - h;
         c.globalAlpha = 0.9;
         c.fillStyle = 'rgba(5, 5, 8, 0.78)';
         c.fillRect(x0, y0, w, h);
         c.fillStyle = '#00f0ff'; c.fillRect(x0, y0, Math.max(2, t * 0.15), h);
         tipos.forEach((x, i) => {
-            const d = TB_PUNTOS[x], cx = x0 + pad + ic, cy = y0 + pad + ic + i * fila;
+            const d = tbEspecial(x), cx = x0 + pad + ic, cy = y0 + pad + ic + i * fila;
             c.fillStyle = `rgba(${d.rgb}, 0.38)`;
             c.beginPath(); c.arc(cx, cy, ic, 0, 7); c.fill();
             c.strokeStyle = d.col; c.lineWidth = Math.max(1.5, t * 0.15); c.stroke();
