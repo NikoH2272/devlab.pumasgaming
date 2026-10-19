@@ -23,7 +23,7 @@ async function abrirEstrategia(tipo, registro = null) {
     if (tbSinGuardar && !confirm('Hay cambios sin guardar en el plano abierto. ¿Descartarlos?')) return;
     await irA('vista-tablero');
     if (!tablero) {
-        tablero = new Tablero($('#tb-canvas'), { alCambiar: alCambiarTablero, alSeleccionarEquipo: pintarEquiposTablero, alSeleccionar: sincronizarPausa });
+        tablero = new Tablero($('#tb-canvas'), { alCambiar: alCambiarTablero, alSeleccionarEquipo: pintarEquiposTablero, alSeleccionar: () => { sincronizarPausa(); sincronizarJugador(); } });
         pintarHerramientas();
         pintarIconos();
         $('#tb-vehiculo').innerHTML = TB_VEHICULOS.map(([id, n, kmh]) => `<option value="${id}">${n}${kmh ? ` · ${kmh} km/h` : ''}</option>`).join('');
@@ -78,6 +78,7 @@ function alCambiarTablero(evento) {
     if (evento && evento.aviso) return mostrarPista(evento.aviso, true);
     sincronizarApertura();
     sincronizarPausa();
+    sincronizarJugador();
     marcarCambio();
     pintarEquiposTablero();
     pintarAnalisisTablero();
@@ -107,7 +108,7 @@ function mostrarPista(txt, alerta = false) {
 // ---------- Herramientas y estilo ----------
 function pintarHerramientas() {
     $('#tb-herr').innerHTML = Object.entries(TB_HERRAMIENTAS).map(([id, h]) => `
-        <button type="button" class="tb-herr ${h.mapa ? 'solo-mapa' : ''}" data-h="${id}" onclick="elegirHerramienta('${id}')" title="${h.n}">
+        <button type="button" class="tb-herr ${h.mapa ? 'solo-mapa' : h.aerea ? 'solo-aerea' : ''}" data-h="${id}" onclick="elegirHerramienta('${id}')" title="${h.n}">
             <i class="fa-solid ${h.i}"></i><span>${h.n}</span>${atajoDe(id) ? `<kbd>${atajoDe(id)}</kbd>` : ''}
         </button>`).join('');
 }
@@ -125,6 +126,7 @@ function elegirHerramienta(id) {
     $('#tb-opc-vision').hidden = !['vision', 'mover'].includes(id);
     $('#tb-opc-calor').hidden = !['caliente', 'mover'].includes(id);
     sincronizarPausa();
+    sincronizarJugador();
     $('#tb-canvas').style.cursor = id === 'mover' ? 'grab' : 'crosshair';
     mostrarPista(TB_HERRAMIENTAS[id].pista);
     tablero.dibujar();
@@ -178,6 +180,41 @@ function quitarPausa() {
     $('#tb-pausa-nota').value = '';
     $('#tb-pausa-seg').value = '';
     ponerPausaTablero();
+}
+
+// ---------- Etiqueta del jugador (L1, L2, L3, L4, SP…) ----------
+function sincronizarJugador() {
+    const caja = $('#tb-opc-jugador');
+    if (!caja || !tablero) return;
+    const sel = tablero.marcaSeleccionada;
+    const esSel = sel && sel.t === 'jugador';
+    caja.hidden = tablero.modo !== 'aerea' || !(tablero.herr === 'jugador' || esSel);
+    if (caja.hidden) return;
+    const actual = esSel ? String(sel.n) : tablero.estilo.jugador;
+    $('#tb-jugador-titulo').textContent = esSel ? 'Jugador seleccionado' : 'Siguiente jugador';
+    $$('#tb-jugadores button').forEach(b => b.classList.toggle('activo', b.dataset.j === actual));
+    if (document.activeElement !== $('#tb-jugador-otro')) $('#tb-jugador-otro').value = TB_JUGADORES.includes(actual) ? '' : actual;
+    const foto = esSel ? sel.foto : tablero.estilo.fotoJugador;
+    $('#tb-jugador-foto').innerHTML = foto ? `<img src="${esc(foto)}" alt="">` : '<i class="fa-solid fa-user"></i>';
+    $('#tb-jugador-quitar').hidden = !foto;
+    $('#tb-jugador-foto-txt').textContent = esSel ? (foto ? 'Cambiar foto' : 'Poner foto') : (foto ? 'Foto lista para el próximo' : 'Foto para el próximo');
+}
+
+async function fotoJugadorTablero(input) {
+    const f = input && input.files && input.files[0];
+    if (input && !f) return;
+    const src = f ? await comprimirImagen(f, 256, 0.88) : null;
+    const a = tablero.ponerFotoJugador(src);
+    if (input) input.value = '';
+    sincronizarJugador();
+    if (src && a === 'siguiente') mostrarPista('Toca la imagen para poner al jugador con su foto');
+}
+
+function ponerJugadorTablero(et) {
+    et = String(et || '').trim().toUpperCase().slice(0, 3);
+    if (!et) return;
+    tablero.ponerJugador(et);
+    sincronizarJugador();
 }
 
 // Intensidad de la zona caliente (nuevas y la seleccionada)

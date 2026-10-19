@@ -498,3 +498,10 @@ footer .creador i { margin-right: 3px; }
 .tb-pausa-campos { display: flex; gap: 6px; }
 .tb-pausa-campos input:first-child { flex: 1; min-width: 0; }
 .tb-pausa-campos input[type="number"] { width: 70px; flex: none; }
+.tb-jugadores { grid-template-columns: repeat(5, 1fr); }
+.tb-jugadores button { font-weight: 700; }
+.vista-tablero[data-modo="mapa"] .solo-aerea { display: none !important; }
+.tb-jugador-foto { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.tb-jugador-mini { width: 38px; height: 38px; flex: none; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 2px solid #00f0ff; color: #00f0ff; background: rgba(5, 5, 8, 0.6); }
+.tb-jugador-mini img { width: 100%; height: 100%; object-fit: cover; }
+.tb-jugador-foto .tb-archivo { flex: 1; justify-content: center; }

@@ -32,6 +32,8 @@ const TB_HERRAMIENTAS = {
     ruta:     { n: 'Rotación',      i: 'fa-route',         mapa: true, pista: 'La rotación sale de la caída del equipo · toca las paradas en orden · cada parada muestra el tiempo de llegada' },
     rutaB:    { n: 'Ruta B',        i: 'fa-code-branch',   mapa: true, pista: 'Rotación alterna (plan B) del equipo elegido · sale de la caída, igual que la principal' },
     medir:    { n: 'Medir',         i: 'fa-ruler',         mapa: true, pista: 'Arrastra entre dos puntos: distancia real y tiempo a pie y en vehículo' },
+    peligro:   { n: 'Zona de peligro', i: 'fa-triangle-exclamation', aerea: true, pista: 'Arrastra para marcar una zona de peligro cuadrada' },
+    lanzadera: { n: 'Lanzadera', i: 'fa-person-falling', pista: 'Arrastra desde la lanzadera hasta donde caes: se dibuja el salto en verde' },
     reposicion: { n: 'Reposición', i: 'fa-feather', pista: 'Punto de reposición (verde, alas de ángel) del tamaño de la caída · con Mover anota el tiempo' },
     binoculares: { n: 'Binoculares', i: 'fa-binoculars', pista: 'Zona amarilla donde los binoculares revelan enemigos (del tamaño de la caída) · con Mover anota el tiempo' },
     caliente: { n: 'Zona caliente', i: 'fa-fire',          pista: 'Toca y arrastra el radio de una zona disputada · elige la intensidad en el panel' },
@@ -79,6 +81,9 @@ const TB_PUNTOS = {
     reposicion:  { col: '#4ade80', rgb: '74, 222, 128', alas: true, n: 'REPOSICIÓN', ley: 'Punto de reposición' }
 };
 
+// Etiquetas rápidas de jugador (la última, SP, se puede repetir)
+const TB_JUGADORES = ['L1', 'L2', 'L3', 'L4', 'SP'];
+
 // Zona caliente: intensidad 1 baja · 2 media · 3 alta
 const TB_CALOR = {
     1: { n: 'BAJA', color: '#f5c542', rgb: '245, 197, 66' },
@@ -114,7 +119,7 @@ class Tablero {
         this.fondo = null;              // Image del fondo
         this.etiquetaFondo = '';        // texto en la cuadrícula si no hay imagen
         this.herr = 'mover';
-        this.estilo = { color: '#00f0ff', grosor: 4, relleno: false, icono: 'objetivo', logo: null, apertura: 70, opacidad: 1, punteado: false, rayado: false, calor: 2 };
+        this.estilo = { color: '#00f0ff', grosor: 4, relleno: false, icono: 'objetivo', logo: null, apertura: 70, opacidad: 1, punteado: false, rayado: false, calor: 2, jugador: 'L1' };
         this.velocidadRuta = TB_VEL_A_PIE;   // m/s para los tiempos de la rotación (lo cambia el panel)
         this.portapapeles = null;
         this.equipoSel = null;
@@ -253,6 +258,26 @@ class Tablero {
         return true;
     }
 
+    // Foto del jugador seleccionado; si no hay ninguno, la lleva el próximo que se ponga (null la quita)
+    ponerFotoJugador(src) {
+        const o = this.marcaSeleccionada;
+        if (o && o.t === 'jugador') {
+            this.instantanea();
+            if (src) o.foto = src; else delete o.foto;
+            this.cambio();
+            return 'seleccionado';
+        }
+        this.estilo.fotoJugador = src;
+        return 'siguiente';
+    }
+
+    // Etiqueta del jugador: para los próximos y para el seleccionado
+    ponerJugador(et) {
+        this.estilo.jugador = et;
+        const o = this.marcaSeleccionada;
+        if (o && o.t === 'jugador') { this.instantanea(); o.n = et; this.cambio(); }
+    }
+
     // Intensidad de las zonas calientes nuevas y de la seleccionada
     ponerCalor(nivel) {
         this.estilo.calor = nivel;
@@ -320,7 +345,7 @@ class Tablero {
         c.strokeRect(OX, OY, L, A);
 
         // Orden de capas: zonas debajo, marcas de equipos y jugadores encima
-        const orden = ['caliente', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'rutaB', 'ruta', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'jugador', 'texto'];
+        const orden = ['caliente', 'peligro', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'lanzadera', 'rutaB', 'ruta', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'jugador', 'texto'];
         const objs = [...this.doc.objetos].sort((a, b) => orden.indexOf(a.t) - orden.indexOf(b.t));
         objs.forEach(o => this._objeto(c, o, P, k));
 
@@ -442,6 +467,38 @@ class Tablero {
                 this._etiqueta(c, `ZONA CALIENTE · ${cal.n}${metros}`, p.x, p.y + r + Math.max(11, k * 13), k, cal.color);
                 break;
             }
+            case 'lanzadera': {
+                // Salto en arco verde: sale de la lanzadera y cae en el destino
+                const col = '#4ade80';
+                const pts = Tablero.arcoSalto(o.a, o.b, 40).map(P);
+                const n = Math.max(2, Math.round(pts.length * (o._avance ?? 1)));
+                const vis = pts.slice(0, n);
+                c.strokeStyle = col; c.fillStyle = col;
+                c.lineWidth = Math.max(2, k * 3.5);
+                c.shadowColor = col; c.shadowBlur = k * 8;
+                c.setLineDash([k * 10, k * 6]);
+                c.beginPath(); c.moveTo(vis[0].x, vis[0].y); vis.slice(1).forEach(q => c.lineTo(q.x, q.y)); c.stroke();
+                c.setLineDash([]); c.shadowBlur = 0;
+                if (vis.length > 2) this._punta(c, vis[vis.length - 2], vis[vis.length - 1], Math.max(8, k * 12));
+                // Sombra del salto en el suelo
+                const a = P(o.a), b = P(o.b);
+                c.globalAlpha = op * 0.35; c.lineWidth = Math.max(1, k * 1.5); c.setLineDash([k * 3, k * 5]);
+                c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+                c.setLineDash([]); c.globalAlpha = op;
+                // Plataforma de salida y punto de caída
+                const R = Math.max(9, k * 13);
+                c.fillStyle = '#050508';
+                c.beginPath(); c.arc(a.x, a.y, R, 0, 7); c.fill();
+                c.strokeStyle = col; c.lineWidth = Math.max(2, k * 2.6); c.stroke();
+                this._icono(c, TB_ICONOS.lanzadera.u, a.x, a.y, R * 1.05, col);
+                if ((o._avance ?? 1) >= 1) {
+                    c.beginPath(); c.arc(b.x, b.y, Math.max(5, k * 7), 0, 7); c.stroke();
+                    c.fillStyle = `rgba(74, 222, 128, 0.35)`; c.fill();
+                }
+                const metros = this.modo === 'mapa' ? ` · ${Math.round(Math.hypot(o.b.x - o.a.x, o.b.y - o.a.y) * metrosPorUnidad(this.mapaActual))} m` : '';
+                this._etiqueta(c, `LANZADERA${metros}`, a.x, a.y + R + Math.max(10, k * 12), k, col);
+                break;
+            }
             case 'medida': {
                 const a = P(o.a), b = P(o.b);
                 c.strokeStyle = '#ffffff'; c.fillStyle = '#ffffff';
@@ -529,6 +586,32 @@ class Tablero {
                 }
                 if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), p.x, p.y - ro - 2, k, o.color,
                     o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
+                break;
+            }
+            case 'peligro': {
+                // Cuadrado rojo rayado con aviso en el centro
+                const a = P(o.a), b = P(o.b), col = '#ff3b30';
+                const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+                c.fillStyle = 'rgba(255, 59, 48, 0.2)';
+                c.fillRect(x, y, w, h);
+                c.save();
+                c.beginPath(); c.rect(x, y, w, h); c.clip();
+                c.globalAlpha = op * 0.35;
+                c.fillStyle = this._rayas(c, col, k);
+                c.fillRect(x, y, w, h);
+                c.restore();
+                c.strokeStyle = col; c.lineWidth = Math.max(2, k * 3);
+                c.shadowColor = col; c.shadowBlur = k * 8;
+                c.strokeRect(x, y, w, h);
+                c.shadowBlur = 0;
+                const ri = Math.max(9, Math.min(w, h) * 0.18, k * 12);
+                if (w > 18 && h > 18) {
+                    c.fillStyle = 'rgba(5, 5, 8, 0.88)';
+                    c.beginPath(); c.arc(x + w / 2, y + h / 2, ri, 0, 7); c.fill();
+                    c.strokeStyle = col; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
+                    this._icono(c, '', x + w / 2, y + h / 2, ri * 1.0, col);
+                }
+                this._etiqueta(c, o.nota ? `PELIGRO · ${o.nota.toUpperCase()}` : 'ZONA DE PELIGRO', x + w / 2, y - Math.max(10, k * 12), k, col);
                 break;
             }
             case 'rect': {
@@ -732,13 +815,28 @@ class Tablero {
                 break;
             }
             case 'jugador': {
-                const p = P(o), r = Math.max(9, k * 12);
+                const txt = String(o.n), largo = txt.length;
+                const p = P(o), r = Math.max(largo > 1 ? 11 : 9, k * (largo > 1 ? 14 : 12));
+                const im = o.foto ? this.imagen(o.foto) : null;
+                if (im) {
+                    // Foto del jugador en círculo con aro de color y su etiqueta debajo
+                    const R = r * 1.6;
+                    c.save();
+                    c.beginPath(); c.arc(p.x, p.y, R, 0, 7); c.clip();
+                    const lado = Math.min(im.naturalWidth, im.naturalHeight) || 1;
+                    c.drawImage(im, (im.naturalWidth - lado) / 2, (im.naturalHeight - lado) / 2, lado, lado, p.x - R, p.y - R, R * 2, R * 2);
+                    c.restore();
+                    c.strokeStyle = o.color || '#00f0ff'; c.lineWidth = Math.max(2.5, k * 3.2);
+                    c.beginPath(); c.arc(p.x, p.y, R, 0, 7); c.stroke();
+                    this._etiqueta(c, txt, p.x, p.y + R + Math.max(9, k * 11), k, o.color || '#00f0ff');
+                    break;
+                }
                 c.fillStyle = o.color || '#00f0ff';
                 c.strokeStyle = '#050508';
                 c.lineWidth = Math.max(2, k * 2.5);
                 c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.fill(); c.stroke();
                 c.fillStyle = '#050508';
-                c.font = `900 ${Math.max(9, k * 11)}px ${TB_FUENTE}`;
+                c.font = `900 ${Math.max(largo > 2 ? 7 : 8, k * (largo > 2 ? 8 : largo > 1 ? 10 : 11))}px ${TB_FUENTE}`;
                 c.textAlign = 'center'; c.textBaseline = 'middle';
                 c.fillText(String(o.n), p.x, p.y + 0.5);
                 break;
@@ -795,6 +893,21 @@ class Tablero {
         c.fill();
     }
 
+    // Puntos del arco de un salto de lanzadera (parábola hacia "arriba" en el plano)
+    static arcoSalto(a, b, n = 30) {
+        const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+        const alto = L * 0.35;
+        // Perpendicular que apunta hacia arriba en pantalla
+        let nx = -dy / L, ny = dx / L;
+        if (ny > 0) { nx = -nx; ny = -ny; }
+        const out = [];
+        for (let i = 0; i <= n; i++) {
+            const t = i / n, h = 4 * t * (1 - t) * alto;
+            out.push({ x: a.x + dx * t + nx * h, y: a.y + dy * t + ny * h });
+        }
+        return out;
+    }
+
     // Alas de ángel con aureola (centro del punto de reposición); s = media anchura
     _alas(c, x, y, s, color) {
         c.save();
@@ -830,7 +943,7 @@ class Tablero {
 
     _caja(o) {
         switch (o.t) {
-            case 'rect': case 'elipse': case 'linea': case 'flecha': case 'medida':
+            case 'rect': case 'elipse': case 'linea': case 'flecha': case 'medida': case 'lanzadera': case 'peligro':
                 return { x1: Math.min(o.a.x, o.b.x), y1: Math.min(o.a.y, o.b.y), x2: Math.max(o.a.x, o.b.x), y2: Math.max(o.a.y, o.b.y) };
             case 'trazo': {
                 const xs = o.pts.map(p => p.x), ys = o.pts.map(p => p.y);
@@ -920,6 +1033,11 @@ class Tablero {
                     break;
                 }
                 case 'linea': case 'flecha': case 'medida': if (distSegmento(l, o.a, o.b) < tol) return { o }; break;
+                case 'lanzadera': {
+                    const arco = Tablero.arcoSalto(o.a, o.b, 20);
+                    if (cerca(o.a, 16 / this.k) || arco.some((p, j) => j && distSegmento(l, arco[j - 1], p) < tol)) return { o };
+                    break;
+                }
                 case 'avion': if (o.a && o.b && distSegmento(l, o.a, o.b) < tol) return { o }; break;
                 case 'trazo':
                     for (let j = 0; j < o.pts.length - 1; j++) if (distSegmento(l, o.pts[j], o.pts[j + 1]) < tol) return { o };
@@ -981,7 +1099,7 @@ class Tablero {
             const a = this.arrastre;
             this.arrastre = null;
             // Formas demasiado pequeñas: se descartan (fue un clic, no un trazo)
-            if (a.nuevo && ['rect', 'elipse', 'linea', 'flecha', 'medida'].includes(a.nuevo.t)
+            if (a.nuevo && ['rect', 'elipse', 'linea', 'flecha', 'medida', 'lanzadera', 'peligro'].includes(a.nuevo.t)
                 && Math.hypot(a.nuevo.b.x - a.nuevo.a.x, a.nuevo.b.y - a.nuevo.a.y) < 6) {
                 this.doc.objetos = this.doc.objetos.filter(o => o !== a.nuevo);
                 this.historial.pop();
@@ -1115,9 +1233,14 @@ class Tablero {
             return;
         }
         if (h === 'jugador') {
-            const n = this.doc.objetos.filter(o => o.t === 'jugador').length + 1;
-            if (this.modo === 'mapa' && n > 4) return this.avisar('Ya están tus 4 jugadores. Usa Mover o Borrar.');
-            agregar({ t: 'jugador', n, x: l.x, y: l.y, color });
+            // Etiqueta elegida en el panel (L1, L2, L3, L4, SP o la que escribas); L1→L2→L3→L4 avanza sola
+            const cuantos = this.doc.objetos.filter(o => o.t === 'jugador').length + 1;
+            if (this.modo === 'mapa' && cuantos > 4) return this.avisar('Ya están tus 4 jugadores. Usa Mover o Borrar.');
+            const n = this.modo === 'mapa' ? cuantos : (this.estilo.jugador || String(cuantos));
+            const nuevo = agregar({ t: 'jugador', n, x: l.x, y: l.y, color });
+            if (this.modo !== 'mapa' && this.estilo.fotoJugador) { nuevo.foto = this.estilo.fotoJugador; this.estilo.fotoJugador = null; }
+            const orden = TB_JUGADORES, i = orden.indexOf(n);
+            if (i >= 0 && i < orden.length - 2) this.estilo.jugador = orden[i + 1];
             this.cambio();
             return;
         }
@@ -1139,6 +1262,16 @@ class Tablero {
             if (!txt || !txt.trim()) return;
             agregar({ t: 'texto', txt: txt.trim().slice(0, 80), x: l.x, y: l.y, color, s: 12 + grosor * 2 });
             this.cambio();
+            return;
+        }
+        if (h === 'peligro') {
+            const o = agregar({ t: 'peligro', a: l, b: { ...l } });
+            this.arrastre = { t: 'forma', nuevo: o };
+            return;
+        }
+        if (h === 'lanzadera') {
+            const o = agregar({ t: 'lanzadera', a: l, b: { ...l } });
+            this.arrastre = { t: 'forma', nuevo: o };
             return;
         }
         if (h === 'medir') {
@@ -1177,7 +1310,10 @@ class Tablero {
             const dif = Math.abs(difAngulo(Math.atan2(l.y - a.o.y, l.x - a.o.x), a.o.ang));
             a.o.ap = Math.round(Math.min(360, Math.max(10, dif * 360 / Math.PI)));
         } else if (a.t === 'forma') {
-            a.nuevo.b = l;
+            if (a.nuevo.t === 'peligro') {   // siempre cuadrado
+                const dx = l.x - a.nuevo.a.x, dy = l.y - a.nuevo.a.y, lado = Math.max(Math.abs(dx), Math.abs(dy));
+                a.nuevo.b = { x: a.nuevo.a.x + Math.sign(dx || 1) * lado, y: a.nuevo.a.y + Math.sign(dy || 1) * lado };
+            } else a.nuevo.b = l;
         } else if (a.t === 'trazo') {
             const u = a.o.pts[a.o.pts.length - 1];
             if (Math.hypot(u.x - l.x, u.y - l.y) > 2) a.o.pts.push(l);
@@ -1355,6 +1491,10 @@ class Tablero {
                 }
                 if (o.t === 'caida' && rutas.some(r => r.caida === o)) {
                     lista.push({ ...o, op: (o.op ?? 1) * a, _sinCartel: reloj !== null && reloj < (o.pausa || 0) });
+                    return;
+                }
+                if (o.t === 'lanzadera') {   // el salto se dibuja de la lanzadera al destino
+                    lista.push({ ...o, op: (o.op ?? 1) * a, _avance: Math.min(1, (t - t0) / 0.9) });
                     return;
                 }
                 lista.push(a >= 1 ? o : { ...o, op: (o.op ?? 1) * a });
