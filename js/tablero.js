@@ -33,6 +33,7 @@ const TB_HERRAMIENTAS = {
     rutaJ:    { n: 'Rotación jugador', i: 'fa-person-walking-arrow-right', aerea: true, pista: 'Elige el jugador en el panel y toca las paradas: la rotación sale de donde está' },
     rutaB:    { n: 'Ruta B',        i: 'fa-code-branch',   mapa: true, pista: 'Rotación alterna (plan B) del equipo elegido · sale de la caída, igual que la principal' },
     medir:    { n: 'Medir',         i: 'fa-ruler',         mapa: true, pista: 'Arrastra entre dos puntos: distancia real y tiempo a pie y en vehículo' },
+    uav:       { n: 'UAV', i: 'fa-satellite', aerea: true, pista: 'Toca donde se lanza el UAV y arrastra el radio que escanea · con Mover anota el tiempo' },
     enemigo:   { n: 'Enemigo', i: 'fa-user-ninja', aerea: true, pista: 'Toca para marcar enemigos (gris) · sin límite' },
     escape:    { n: 'Zona de escape', i: 'fa-person-running', aerea: true, pista: 'Arrastra en la dirección de la salida: flecha con el texto dentro' },
     peligro:   { n: 'Zona de peligro', i: 'fa-triangle-exclamation', aerea: true, pista: 'Arrastra para marcar una zona de peligro cuadrada' },
@@ -95,6 +96,9 @@ const TB_SLOTS = [
     { n: 'SP', color: '#facc15', texto: '#050508' }
 ];
 const TB_ENEMIGO = '#9ca3af';
+const TB_UAV = '#a855f7';
+// Marcas que en el video se abren al llegar el equipo y laten mientras dura su tiempo
+const tbPulso = t => !!TB_PUNTOS[t] || t === 'uav';
 
 // Zona caliente: intensidad 1 baja · 2 media · 3 alta
 const TB_CALOR = {
@@ -252,7 +256,7 @@ class Tablero {
     get puntoPausa() {
         const o = this.marcaSeleccionada;
         if (!o) return null;
-        if (o.t === 'caida' || o.t === 'vision' || TB_PUNTOS[o.t] || (o.t === 'jugador' && this.modo !== 'mapa')) return { p: o, tipo: o.t };
+        if (o.t === 'caida' || o.t === 'vision' || tbPulso(o.t) || (o.t === 'jugador' && this.modo !== 'mapa')) return { p: o, tipo: o.t };
         if ((o.t === 'ruta' || o.t === 'rutaB' || o.t === 'rutaJ') && o.pts[this.seleccion.j]) return { p: o.pts[this.seleccion.j], tipo: 'parada', n: this.seleccion.j + 2, b: o.t === 'rutaB' };
         return null;
     }
@@ -427,7 +431,7 @@ class Tablero {
         c.strokeRect(OX, OY, L, A);
 
         // Orden de capas: zonas debajo, marcas de equipos y jugadores encima
-        const orden = ['caliente', 'peligro', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'lanzadera', 'escape', 'rutaB', 'ruta', 'rutaJ', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'enemigo', 'jugador', 'texto'];
+        const orden = ['caliente', 'uav', 'peligro', 'segura', 'vision', 'avion', 'rect', 'elipse', 'trazo', 'linea', 'flecha', 'lanzadera', 'escape', 'rutaB', 'ruta', 'rutaJ', 'medida', 'icono', 'logo', 'reposicion', 'binoculares', 'caida', 'enemigo', 'jugador', 'texto'];
         const objs = [...this.doc.objetos].sort((a, b) => orden.indexOf(a.t) - orden.indexOf(b.t));
         objs.forEach(o => this._objeto(c, o, P, k));
         if (this.modo !== 'mapa') this._leyendaJugadores(c, OX, OY, L, A, k);
@@ -668,6 +672,43 @@ class Tablero {
                     c.shadowBlur = 0; c.globalAlpha = op;
                 }
                 if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), p.x, p.y - ro - 2, k, o.color,
+                    o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
+                break;
+            }
+            case 'uav': {
+                // Lanzamiento de UAV: zona de escaneo morada con anillos de radar
+                const p = P(o), r = o.r * k, col = TB_UAV;
+                const g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+                g.addColorStop(0, 'rgba(168, 85, 247, 0.35)');
+                g.addColorStop(1, 'rgba(168, 85, 247, 0.08)');
+                c.fillStyle = g;
+                c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.fill();
+                if (o._pulso !== undefined) {
+                    // Barrido de radar girando
+                    const a0 = o._pulso * Math.PI * 2 - Math.PI / 2;
+                    const gb = c.createConicGradient ? c.createConicGradient(a0 - 0.9, p.x, p.y) : null;
+                    if (gb) { gb.addColorStop(0, 'rgba(168, 85, 247, 0)'); gb.addColorStop(0.14, 'rgba(216, 180, 254, 0.55)'); gb.addColorStop(0.15, 'rgba(168, 85, 247, 0)'); gb.addColorStop(1, 'rgba(168, 85, 247, 0)'); c.fillStyle = gb; }
+                    else c.fillStyle = 'rgba(216, 180, 254, 0.35)';
+                    c.beginPath(); c.moveTo(p.x, p.y); c.arc(p.x, p.y, r, a0 - 0.9, a0); c.closePath(); c.fill();
+                }
+                c.strokeStyle = col; c.lineWidth = Math.max(1, k * 1.2);
+                c.setLineDash([k * 4, k * 4]);
+                [0.33, 0.66].forEach(f => { c.beginPath(); c.arc(p.x, p.y, r * f, 0, 7); c.stroke(); });
+                c.setLineDash([]);
+                c.lineWidth = Math.max(2, k * 3); c.shadowColor = col; c.shadowBlur = k * 8;
+                c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.stroke();
+                c.shadowBlur = 0;
+                const ri = Math.max(10, k * 13);
+                c.fillStyle = 'rgba(5, 5, 8, 0.9)';
+                c.beginPath(); c.arc(p.x, p.y, ri, 0, 7); c.fill();
+                c.strokeStyle = col; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
+                this._icono(c, '\uf7bf', p.x, p.y, ri * 1.05, '#d8b4fe');
+                if (o._resta !== undefined && o.pausa) {
+                    c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(2, k * 3);
+                    c.beginPath(); c.arc(p.x, p.y, ri + Math.max(4, k * 5), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (o._resta / o.pausa)); c.stroke();
+                }
+                this._etiqueta(c, 'LANZAMIENTO UAV', p.x, p.y + r + Math.max(10, k * 12), k, col);
+                if (o.nota || o.pausa) this._cartel(c, Tablero.textoPausa(o, o._resta), p.x, p.y - ri - 2, k, col,
                     o._resta !== undefined && o.pausa ? o._resta / o.pausa : null);
                 break;
             }
@@ -1078,7 +1119,7 @@ class Tablero {
                 const w = this.cx.measureText(o.txt).width;
                 return { x1: o.x, y1: o.y, x2: o.x + w, y2: o.y + (o.s || 18) };
             }
-            case 'caliente': case 'segura': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
+            case 'caliente': case 'segura': case 'uav': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
             case 'vision': return { x1: o.x - o.r, y1: o.y - o.r, x2: o.x + o.r, y2: o.y + o.r };
             case 'binoculares': case 'reposicion': return { x1: o.x - 20, y1: o.y - 20, x2: o.x + 20, y2: o.y + 20 };
             default: {
@@ -1149,7 +1190,7 @@ class Tablero {
                     break;
                 }
                 case 'segura': if (Math.abs(Math.hypot(o.x - l.x, o.y - l.y) - o.r) < tol) return { o }; break;
-                case 'caliente': if (cerca(o, o.r)) return { o }; break;
+                case 'caliente': case 'uav': if (cerca(o, o.r)) return { o }; break;
                 case 'vision': {
                     if (cerca(o, 16 / this.k)) return { o };
                     const dif = difAngulo(Math.atan2(l.y - o.y, l.x - o.x), o.ang);
@@ -1314,6 +1355,14 @@ class Tablero {
                 this.seleccion = { o: ruta, j: ruta.pts.length - 1 };
             }
             this.cambio();
+            this.alSeleccionar(this.seleccion);
+            return;
+        }
+        if (h === 'uav') {
+            const o = agregar({ t: 'uav', x: l.x, y: l.y, r: 70 });
+            this.arrastre = { t: 'radio', o, min: 20 };
+            this.seleccion = { o };
+            this.dibujar();
             this.alSeleccionar(this.seleccion);
             return;
         }
@@ -1564,7 +1613,7 @@ class Tablero {
         const esRuta = o => o.t === 'ruta' || o.t === 'rutaB' || o.t === 'rutaJ';
         // Primero zonas y marcas generales, luego caídas; las rotaciones al final se animan aparte
         const peso = o => o.t === 'caida' ? 1 : 0;
-        const apariciones = objs.filter(o => !esRuta(o) && !((o.t === 'vision' || TB_PUNTOS[o.t]) && this._visorDeRuta(o))).map((o, i) => ({ o, i })).sort((a, b) => peso(a.o) - peso(b.o) || a.i - b.i).map(x => x.o);
+        const apariciones = objs.filter(o => !esRuta(o) && !((o.t === 'vision' || tbPulso(o.t)) && this._visorDeRuta(o))).map((o, i) => ({ o, i })).sort((a, b) => peso(a.o) - peso(b.o) || a.i - b.i).map(x => x.o);
         const INICIO = 0.8, FUNDIDO = 0.45;
         const paso = apariciones.length ? Math.min(0.4, 7 / apariciones.length) : 0;
         const entrada = new Map(apariciones.map((o, i) => [o, INICIO + i * paso]));
@@ -1594,7 +1643,7 @@ class Tablero {
             r.pasos.forEach(s => { tr += s.dur; if (s.tipo === 'viaje') marcar(s.b); });
         });
         const visores = new Map();
-        objs.filter(o => o.t === 'vision' || TB_PUNTOS[o.t]).forEach(v => {
+        objs.filter(o => o.t === 'vision' || tbPulso(o.t)).forEach(v => {
             let mejor = null;
             llegadas.forEach((tr, p) => {
                 const d = Math.hypot(p.x - v.x, p.y - v.y);
@@ -1647,7 +1696,8 @@ class Tablero {
                     lista.push(v);
                     return;
                 }
-                if (TB_PUNTOS[o.t] && o.pausa) {
+                if (o.t === 'uav' && !o.pausa) { lista.push({ ...o, op: (o.op ?? 1) * a, _pulso: ((t - t0) / 2) % 1 }); return; }
+                if (tbPulso(o.t) && o.pausa) {
                     const restaB = Math.max(0, o.pausa - (reloj ?? 0));
                     lista.push({ ...o, op: (o.op ?? 1) * a * (restaB ? 1 : 0.45), _resta: restaB, ...(restaB ? { _pulso: ((t - t0) / 1.4) % 1 } : {}) });
                     return;
@@ -1667,7 +1717,7 @@ class Tablero {
             if (reloj !== null) visores.forEach((tr, o) => {
                 if (reloj < tr) return;
                 const e = Math.min(1, (reloj - tr) * escala / 0.9), suave = 1 - (1 - e) ** 3;
-                const v = TB_PUNTOS[o.t] ? { ...o, op: (o.op ?? 1) * suave, _pulso: ((reloj - tr) * escala / 1.4) % 1 }
+                const v = tbPulso(o.t) ? { ...o, op: (o.op ?? 1) * suave, _pulso: ((reloj - tr) * escala / 1.4) % 1 }
                     : { ...o, r: o.r * suave, ap: Math.max(1, o.ap * suave), _barrido: ((reloj - tr) * escala / 2.4) % 1 };
                 if (o.pausa) {
                     v._resta = Math.max(0, o.pausa - (reloj - tr));

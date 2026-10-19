@@ -103,7 +103,8 @@ function entrar() {
     $$('[data-permiso]').forEach(el => { el.hidden = !Auth.puede(el.dataset.permiso); });
     aplicarModulos();
     aplicarBotonesAyuda();
-    irA('inicio');
+    // El manager entra directo al módulo Administrativo
+    irA(u.rol === 'manager' && moduloVisible('administrativo') ? 'vista-admin' : 'inicio');
     cargarModulos();
 }
 
@@ -211,7 +212,8 @@ const RENDER_VISTA = {
     'vista-informe': renderFiltrosInforme,
     'vista-caidas': renderCaidas,
     'vista-repisa': renderRepisa,
-    'vista-ajustes': renderAjustes
+    'vista-ajustes': renderAjustes,
+    'vista-admin': renderAdmin
 };
 
 function irA(vista) {

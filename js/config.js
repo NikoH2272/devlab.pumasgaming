@@ -25,7 +25,8 @@ const MODULOS = {
     estrategia:   { n: 'Estrategia',          detalle: 'Mapas, vistas aéreas y repisa', vistas: ['vista-tablero', 'vista-repisa'], roles: ['admin'] },
     mapstream:    { n: 'MapStream',           detalle: 'Repetición de partidas desde el replay del juego', vistas: ['vista-mapstream'], roles: ['admin'] },
     estadisticas: { n: 'Estadísticas CSV',    detalle: 'Generar el CSV desde el replay y ver estadísticas por partida y torneo', vistas: ['vista-estadisticas'], roles: ['admin'] },
-    herramientas: { n: 'Herramientas',        detalle: 'Resultados (logs), módulos informativos y respaldo', vistas: ['modulo-resultados', 'modulo-admin', 'modulo-rendimiento', 'modulo-analisis'], roles: TODOS_LOS_ROLES }
+    administrativo: { n: 'Administrativo',    detalle: 'Equipo, miembros, presupuesto en USD, torneos, relámpagos y resultados (entrada del manager)', vistas: ['vista-admin'], roles: ['admin', 'ceo', 'manager'] },
+    herramientas: { n: 'Herramientas',        detalle: 'Resultados (logs), módulos informativos y respaldo', vistas: ['modulo-resultados', 'modulo-rendimiento', 'modulo-analisis'], roles: TODOS_LOS_ROLES }
 };
 
 // Nombre de la Edge Function que lee las capturas con Gemini

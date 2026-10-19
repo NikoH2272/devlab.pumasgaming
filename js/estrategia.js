@@ -153,7 +153,7 @@ function sincronizarPausa() {
     const sel = tablero && tablero.puntoPausa;
     caja.hidden = !sel;
     if (!sel) return;
-    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'En este visor' : sel.tipo === 'binoculares' ? 'En los binoculares' : sel.tipo === 'reposicion' ? 'En la reposición' : sel.tipo === 'jugador' ? `Antes de salir · ${tablero.nombreJugador(sel.p.slot ?? 0)}` : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
+    const titulo = sel.tipo === 'caida' ? 'En la caída' : sel.tipo === 'vision' ? 'En este visor' : sel.tipo === 'binoculares' ? 'En los binoculares' : sel.tipo === 'reposicion' ? 'En la reposición' : sel.tipo === 'uav' ? 'Escaneo del UAV' : sel.tipo === 'jugador' ? `Antes de salir · ${tablero.nombreJugador(sel.p.slot ?? 0)}` : `En la parada ${sel.b ? 'B' : ''}${sel.n}`;
     $('#tb-pausa-titulo').textContent = titulo;
     // No pisar lo que el usuario está escribiendo
     if (document.activeElement !== $('#tb-pausa-nota')) $('#tb-pausa-nota').value = sel.p.nota || '';

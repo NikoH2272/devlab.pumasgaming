@@ -378,5 +378,34 @@ const DB = {
 
     async eliminarPartida(id) {
         await q(supabaseClient.from('matches').delete().eq('id', id));
+    },
+
+    // ---------- Administrativo (migración 009) ----------
+    // Todo va en admin_registros: { id, tipo, ...datos }
+    async adminRegistros(orgId) {
+        try {
+            const filas = await q(supabaseClient.from('admin_registros').select('*').eq('org_id', orgId).order('creado'));
+            return filas.map(f => ({ ...f.datos, id: f.id, tipo: f.tipo, creado: f.creado, actualizado: f.actualizado }));
+        } catch (err) {
+            if (/admin_registros|schema cache|does not exist/i.test(err.message)) throw new Error('Falta ejecutar supabase/migrations/009_administrativo.sql en Supabase.');
+            throw err;
+        }
+    },
+
+    async guardarAdmin(orgId, tipo, datos, id = null) {
+        const limpio = { ...datos };
+        ['id', 'tipo', 'creado', 'actualizado'].forEach(k => delete limpio[k]);
+        if (id) {
+            await q(supabaseClient.from('admin_registros').update({ datos: limpio, actualizado: new Date().toISOString() }).eq('id', id));
+            return id;
+        }
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        const nuevo = crypto.randomUUID();
+        await q(supabaseClient.from('admin_registros').insert({ id: nuevo, org_id: orgId, tipo, datos: limpio, creado_por: user.id }));
+        return nuevo;
+    },
+
+    async borrarAdmin(id) {
+        await q(supabaseClient.from('admin_registros').delete().eq('id', id));
     }
 };

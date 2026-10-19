@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/moderno.css?v=26">
+    <link rel="stylesheet" href="css/moderno.css?v=28">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -91,6 +91,11 @@
             <i class="fa-solid fa-gear"></i><span>Ajustes</span>
         </button>
 
+        <div class="sb-titulo" data-modulo="administrativo"><span>Gestión</span></div>
+        <button type="button" data-modulo="administrativo" data-vista="vista-admin" onclick="irA('vista-admin')" title="Administrativo">
+            <i class="fa-solid fa-folder-open"></i><span>Administrativo</span>
+        </button>
+
         <div class="sb-titulo" data-modulo="estrategia mapstream estadisticas"><span>Estrategia</span></div>
         <button type="button" data-modulo="estrategia" data-vista="vista-tablero" data-modo="mapa" onclick="abrirEstrategia('mapa')" title="Mapas">
             <i class="fa-solid fa-map-location-dot"></i><span>Mapas</span>
@@ -111,9 +116,6 @@
         <div class="sb-titulo" data-modulo="herramientas"><span>Herramientas</span></div>
         <button type="button" data-modulo="herramientas" data-vista="modulo-resultados" onclick="mostrarSeccion('modulo-resultados', 'sec-resultados')" title="Resultados (logs)">
             <i class="fa-solid fa-table-cells"></i><span>Resultados (logs)</span>
-        </button>
-        <button type="button" data-modulo="herramientas" data-vista="modulo-admin" onclick="mostrarSeccion('modulo-admin', 'sec-equipo')" title="Administrativo">
-            <i class="fa-solid fa-folder-open"></i><span>Administrativo</span>
         </button>
         <button type="button" data-modulo="herramientas" data-vista="modulo-rendimiento" onclick="mostrarSeccion('modulo-rendimiento', 'sec-dashboard')" title="Rendimiento">
             <i class="fa-solid fa-chart-line"></i><span>Rendimiento</span>
@@ -681,44 +683,17 @@
     </div>
 </section>
 
-<!-- ================= MÓDULO 1: ADMINISTRATIVO ================= -->
-<section id="modulo-admin" class="view-section">
-    <div style="padding: 10px 4%;">
-        <button onclick="volverInicio()" class="btn-volver"><i class="fa-solid fa-arrow-left"></i> Volver al Inicio</button>
-        <h2 class="section-title">Módulo Administrativo</h2>
-
-        <div id="sec-equipo" class="sub-seccion-content" style="margin-bottom: 20px;">
-            <div class="card-box" style="text-align: left;">
-                <h3 style="color: var(--primary);"><i class="fa-solid fa-shield-cat"></i> Equipo</h3>
-                <p>Estructura general, insignias, alineaciones oficiales y registros legales de Pumas Gaming.</p>
-            </div>
-        </div>
-        <div id="sec-miembros" class="sub-seccion-content" style="margin-bottom: 20px;">
-            <div class="card-box" style="text-align: left;">
-                <h3 style="color: var(--primary);"><i class="fa-solid fa-id-card-clip"></i> Miembros</h3>
-                <p>Directorio de staff, analistas, coachs y jugadores activos en el circuito.</p>
-            </div>
-        </div>
-        <div id="sec-presupuestos" class="sub-seccion-content" style="margin-bottom: 20px;">
-            <div class="card-box" style="text-align: left;">
-                <h3 style="color: var(--primary);"><i class="fa-solid fa-wallet"></i> Presupuestos</h3>
-                <p>Control financiero de inscripciones, viáticos, inversiones en hardware y premios.</p>
-            </div>
-        </div>
-        <div id="sec-torneos" class="sub-seccion-content" style="margin-bottom: 20px;">
-            <div class="card-box" style="text-align: left;">
-                <h3 style="color: var(--primary);"><i class="fa-solid fa-trophy"></i> Torneos</h3>
-                <p>Inscripciones, calendarios de ligas y torneos oficiales (Free Fire LATAM / USA).</p>
-            </div>
-        </div>
-        <div id="sec-resultados-eport" class="sub-seccion-content" style="margin-bottom: 20px;">
-            <div class="card-box" style="text-align: left;">
-                <h3 style="color: var(--primary);"><i class="fa-solid fa-chart-pie"></i> Resultados por e-Sport</h3>
-                <p>Consolidado histórico de desempeño por disciplina competitiva de Pumas Gaming.</p>
-            </div>
-        </div>
+<!-- ================= ADMINISTRATIVO (js/administrativo.js) ================= -->
+<section id="vista-admin" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Administrativo</h2>
+        <div id="adm-tabs" class="adm-tabs" role="tablist" aria-label="Secciones administrativas"></div>
+        <div id="adm-contenido"></div>
     </div>
 </section>
+<div id="adm-hoja" class="adm-hoja" hidden onclick="if (event.target === this) admCerrarHoja()">
+    <div class="adm-hoja-caja"><button type="button" class="adm-hoja-cerrar" onclick="admCerrarHoja()" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button><div id="adm-hoja-cont"></div></div>
+</div>
 
 <!-- ================= MÓDULO 2: RENDIMIENTO ================= -->
 <section id="modulo-rendimiento" class="view-section">
@@ -843,12 +818,12 @@
     <img alt="Captura del marcador">
 </div>
 
-<script src="js/config.js?v=17"></script>
-<script src="js/db.js?v=14"></script>
+<script src="js/config.js?v=18"></script>
+<script src="js/db.js?v=15"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=38"></script>
-<script src="js/estrategia.js?v=28"></script>
+<script src="js/tablero.js?v=39"></script>
+<script src="js/estrategia.js?v=29"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=18"></script>
@@ -856,7 +831,8 @@
 <script src="js/estadisticas-csv.js?v=4"></script>
 <script src="js/estadisticas-vista.js?v=4"></script>
 <script src="js/resultados.js?v=14"></script>
-<script src="js/app.js?v=16"></script>
+<script src="js/administrativo.js?v=1"></script>
+<script src="js/app.js?v=17"></script>
 <script src="js/animaciones.js?v=14"></script>
 </body>
 </html>
