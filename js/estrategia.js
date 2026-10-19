@@ -56,6 +56,8 @@ async function abrirEstrategia(tipo, registro = null) {
     $('#tb-estado').textContent = registro?.id ? 'Abierto desde la Repisa' : 'Sin guardar';
     pintarEquiposTablero();
     pintarAnalisisTablero();
+    tbActual.recortes = [];
+    setTimeout(pintarFormatoInforme, 150);
 }
 
 // Imagen subida por la organización; si no hay, la incluida en iconosobs/mapas
@@ -341,10 +343,152 @@ async function subirImagenMapa(input) {
 async function subirImagenAerea(input) {
     const f = input.files && input.files[0];
     if (!f) return;
-    tbActual.fondo = await comprimirImagen(f, 1600, 0.82);
+    tbActual.fondo = await comprimirImagen(f, 2000, 0.85);
+    tbActual.recortes = [];
     tablero.ponerFondo(tbActual.fondo);
     marcarCambio();
     input.value = '';
+    pintarFormatoInforme();
+}
+
+// ---------- Recortar la imagen aérea ----------
+// El recuadro se mueve y se agranda con el mouse o el dedo; las marcas
+// se reacomodan para quedar en el mismo lugar de la imagen.
+const rc = { img: null, sel: null, prop: null, arrastre: null };
+
+function abrirRecorte() {
+    if (!tbActual || !tbActual.fondo) return toast('Primero sube la imagen aérea.', 'error');
+    const im = new Image();
+    im.onload = () => {
+        rc.img = im;
+        rc.prop = null;
+        rc.sel = { x: im.naturalWidth * 0.05, y: im.naturalHeight * 0.05, w: im.naturalWidth * 0.9, h: im.naturalHeight * 0.9 };
+        $('#tb-recorte-img').src = im.src;
+        $('#tb-recorte').hidden = false;
+        $('#tb-recorte-deshacer').hidden = !(tbActual.recortes && tbActual.recortes.length);
+        $$('#tb-recorte-prop button').forEach(b => b.classList.toggle('activo', b.dataset.p === 'libre'));
+        requestAnimationFrame(pintarRecorte);
+    };
+    im.src = tbActual.fondo;
+}
+
+function cerrarRecorte() { $('#tb-recorte').hidden = true; }
+
+// Escala entre píxeles de la imagen y píxeles en pantalla
+function escalaRecorte() {
+    const img = $('#tb-recorte-img');
+    return img.clientWidth / rc.img.naturalWidth || 1;
+}
+
+function pintarRecorte() {
+    if (!rc.img) return;
+    const s = escalaRecorte(), q = rc.sel, el = $('#tb-recorte-sel');
+    el.style.left = q.x * s + 'px'; el.style.top = q.y * s + 'px';
+    el.style.width = q.w * s + 'px'; el.style.height = q.h * s + 'px';
+    $('#tb-recorte-medida').textContent = `${Math.round(q.w)} × ${Math.round(q.h)} px · ${(q.w / q.h).toFixed(2)}:1`;
+    $$('#tb-recorte-sel i[data-h]').forEach(h => { h.hidden = !!rc.prop && h.dataset.h.length === 1; });
+}
+
+function proporcionRecorte(p) {
+    $$('#tb-recorte-prop button').forEach(b => b.classList.toggle('activo', b.dataset.p === p));
+    const W = rc.img.naturalWidth, H = rc.img.naturalHeight;
+    if (p === 'libre') { rc.prop = null; return pintarRecorte(); }
+    const [a, b] = p.split(':').map(Number);
+    rc.prop = a / b;
+    // El recuadro más grande con esa proporción, centrado en el actual
+    let w = Math.min(W, H * rc.prop), h = w / rc.prop;
+    const cx = rc.sel.x + rc.sel.w / 2, cy = rc.sel.y + rc.sel.h / 2;
+    rc.sel = { x: Math.max(0, Math.min(W - w, cx - w / 2)), y: Math.max(0, Math.min(H - h, cy - h / 2)), w, h };
+    pintarRecorte();
+}
+
+function iniciarArrastreRecorte(ev) {
+    const h = ev.target.dataset.h || (ev.target.id === 'tb-recorte-sel' ? 'mover' : null);
+    if (!h) return;
+    ev.preventDefault();
+    ev.target.setPointerCapture && ev.target.setPointerCapture(ev.pointerId);
+    rc.arrastre = { h, x: ev.clientX, y: ev.clientY, sel: { ...rc.sel } };
+}
+
+function moverArrastreRecorte(ev) {
+    const a = rc.arrastre;
+    if (!a) return;
+    const s = escalaRecorte(), W = rc.img.naturalWidth, H = rc.img.naturalHeight, min = 40;
+    const dx = (ev.clientX - a.x) / s, dy = (ev.clientY - a.y) / s;
+    let { x, y, w, h } = a.sel;
+    if (a.h === 'mover') {
+        x = Math.max(0, Math.min(W - w, x + dx)); y = Math.max(0, Math.min(H - h, y + dy));
+    } else {
+        let x2 = x + w, y2 = y + h;
+        if (a.h.includes('w')) x = Math.min(x2 - min, Math.max(0, x + dx));
+        if (a.h.includes('e')) x2 = Math.max(x + min, Math.min(W, x2 + dx));
+        if (a.h.includes('n')) y = Math.min(y2 - min, Math.max(0, y + dy));
+        if (a.h.includes('s')) y2 = Math.max(y + min, Math.min(H, y2 + dy));
+        w = x2 - x; h = y2 - y;
+        if (rc.prop) {
+            // Con proporción fija manda el lado que más cambió; la esquina contraria queda quieta
+            if (Math.abs(dx) >= Math.abs(dy)) h = w / rc.prop; else w = h * rc.prop;
+            if (a.h.includes('w')) x = x2 - w;
+            if (a.h.includes('n')) y = y2 - h;
+            if (x < 0 || y < 0 || x + w > W || y + h > H) return;
+        }
+    }
+    rc.sel = { x, y, w, h };
+    pintarRecorte();
+}
+
+function soltarArrastreRecorte() { rc.arrastre = null; }
+
+async function aplicarRecorte() {
+    const q = rc.sel, im = rc.img;
+    const lado = Math.max(q.w, q.h), escala = Math.min(1, 2000 / lado);
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(q.w * escala); cv.height = Math.round(q.h * escala);
+    const c = cv.getContext('2d');
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(im, q.x, q.y, q.w, q.h, 0, 0, cv.width, cv.height);
+    const nuevo = cv.toDataURL('image/jpeg', 0.88);
+    // Las marcas se mueven con la imagen (1000 unidades = ancho de la imagen)
+    const u = TB_ANCHO / im.naturalWidth, cx = q.x * u, cy = q.y * u, f = TB_ANCHO / (q.w * u);
+    tablero.instantanea();
+    tablero.transformarMarcas(cx, cy, f);
+    (tbActual.recortes = tbActual.recortes || []).push({ fondo: tbActual.fondo, cx, cy, f });
+    tbActual.fondo = nuevo;
+    tablero.ponerFondo(nuevo);
+    tablero.vista = { z: 1, x: 0, y: 0 };
+    cerrarRecorte();
+    marcarCambio();
+    setTimeout(pintarFormatoInforme, 120);
+    toast('Imagen recortada. Las marcas se acomodaron al recorte.');
+}
+
+function deshacerRecorte() {
+    const r = tbActual.recortes && tbActual.recortes.pop();
+    if (!r) return;
+    tablero.instantanea();
+    tablero.transformarMarcas(-r.cx * r.f, -r.cy * r.f, 1 / r.f);
+    tbActual.fondo = r.fondo;
+    tablero.ponerFondo(r.fondo);
+    cerrarRecorte();
+    marcarCambio();
+    setTimeout(pintarFormatoInforme, 120);
+    toast('Se volvió a la imagen anterior.');
+}
+
+// ---------- Formato del video: informe al lado o debajo ----------
+function ponerFormatoInforme(v) {
+    tablero.instantanea();
+    tablero.doc.informe = v;
+    marcarCambio();
+    pintarFormatoInforme();
+}
+
+function pintarFormatoInforme() {
+    const sel = $('#tb-informe');
+    if (!sel || !tablero) return;
+    sel.value = tablero.doc.informe || 'auto';
+    const f = tablero.formatoInforme();
+    $('#tb-informe-txt').textContent = f === 'abajo' ? 'Video vertical 9:16 · informe debajo' : 'Video horizontal 16:9 · informe al lado';
 }
 
 // ---------- Equipos del plano (modo mapa) ----------

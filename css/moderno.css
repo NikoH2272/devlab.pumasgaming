@@ -639,3 +639,26 @@ body.adm-hoja-abierta { overflow: hidden; }
 
 .tb-pausa-acciones button.ataque { border-color: rgba(255, 59, 48, 0.5); color: #ffb4ae; }
 .tb-pausa-acciones button.ataque.activar { background: rgba(255, 59, 48, 0.18); color: #fff; font-weight: 700; }
+
+/* ---------- Recortar imagen aérea ---------- */
+.tb-recorte { position: fixed; inset: 0; z-index: 2100; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; padding: 16px; touch-action: none; }
+.tb-recorte[hidden] { display: none; }
+.tb-recorte-caja { width: min(980px, 100%); max-height: 96vh; overflow: auto; background: #0b0d12; border: 1px solid rgba(0, 240, 255, 0.35); padding: 16px; }
+.tb-recorte-caja h3 { margin: 0 0 10px; }
+.tb-recorte-lienzo { position: relative; width: fit-content; max-width: 100%; margin: 0 auto; user-select: none; touch-action: none; }
+.tb-recorte-lienzo img { display: block; max-width: 100%; max-height: 62vh; }
+.tb-recorte-sel { position: absolute; border: 2px solid #00f0ff; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); cursor: move; touch-action: none; }
+.tb-recorte-sel i { position: absolute; width: 16px; height: 16px; background: #00f0ff; border: 2px solid #050508; }
+.tb-recorte-sel i[hidden] { display: none; }
+.tb-recorte-sel i[data-h="nw"] { left: -9px; top: -9px; cursor: nwse-resize; }
+.tb-recorte-sel i[data-h="ne"] { right: -9px; top: -9px; cursor: nesw-resize; }
+.tb-recorte-sel i[data-h="sw"] { left: -9px; bottom: -9px; cursor: nesw-resize; }
+.tb-recorte-sel i[data-h="se"] { right: -9px; bottom: -9px; cursor: nwse-resize; }
+.tb-recorte-sel i[data-h="n"] { left: calc(50% - 8px); top: -9px; cursor: ns-resize; }
+.tb-recorte-sel i[data-h="s"] { left: calc(50% - 8px); bottom: -9px; cursor: ns-resize; }
+.tb-recorte-sel i[data-h="e"] { right: -9px; top: calc(50% - 8px); cursor: ew-resize; }
+.tb-recorte-sel i[data-h="w"] { left: -9px; top: calc(50% - 8px); cursor: ew-resize; }
+@media (pointer: coarse) { .tb-recorte-sel i { width: 24px; height: 24px; } }
+.tb-informe-caja { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #9ca3af; text-transform: uppercase; }
+.tb-informe-caja select { text-transform: none; }
+.tb-informe-caja small { text-transform: none; font-weight: 400; }

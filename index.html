@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/moderno.css?v=29">
+    <link rel="stylesheet" href="css/moderno.css?v=30">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -214,7 +214,8 @@
                     <i class="fa-solid fa-upload"></i> Subir imagen
                     <input type="file" accept="image/*" hidden onchange="subirImagenAerea(this)">
                 </label>
-                <p class="ayuda">Captura de la vista aérea, un plano o cualquier imagen para marcar.</p>
+                <button type="button" class="btn-sec tb-ancho" style="margin-top:6px" onclick="abrirRecorte()"><i class="fa-solid fa-crop-simple"></i> Recortar imagen</button>
+                <p class="ayuda">Captura de la vista aérea, un plano o cualquier imagen para marcar. Recórtala para enfocar la zona; las marcas se acomodan solas.</p>
             </div>
 
             <div class="tb-bloque">
@@ -343,6 +344,14 @@
                 <button type="button" class="btn-generar" onclick="guardarTablero()"><i class="fa-solid fa-box-archive"></i> GUARDAR EN LA REPISA</button>
                 <div class="tb-fila-botones">
                     <button type="button" class="btn-sec" onclick="descargarTablero()"><i class="fa-solid fa-download"></i> PNG</button>
+                    <label class="tb-informe-caja">Informe del video
+                        <select id="tb-informe" onchange="ponerFormatoInforme(this.value)" aria-label="Dónde va el informe en el video">
+                            <option value="auto">Automático (según la imagen)</option>
+                            <option value="lado">Al lado · horizontal 16:9</option>
+                            <option value="abajo">Debajo · vertical 9:16</option>
+                        </select>
+                        <small id="tb-informe-txt" class="ayuda"></small>
+                    </label>
                     <button type="button" class="btn-sec" onclick="descargarVideoTablero(this, false)" title="Video liviano (1080 px, 30 fps) para mandar por WhatsApp"><i class="fa-brands fa-whatsapp"></i> Video</button>
                     <button type="button" class="btn-sec" onclick="descargarVideoTablero(this, true)" title="Video en máxima calidad (1920 px, 60 fps), más pesado"><i class="fa-solid fa-film"></i> Video HD</button>
                     <button type="button" class="btn-sec" onclick="nuevoTablero()"><i class="fa-solid fa-file"></i> Nuevo</button>
@@ -696,6 +705,31 @@
         <div id="adm-contenido"></div>
     </div>
 </section>
+<div id="tb-recorte" class="tb-recorte" hidden onpointermove="moverArrastreRecorte(event)" onpointerup="soltarArrastreRecorte()" onpointercancel="soltarArrastreRecorte()">
+    <div class="tb-recorte-caja">
+        <h3><i class="fa-solid fa-crop-simple"></i> Recortar imagen</h3>
+        <div id="tb-recorte-prop" class="adm-chips">
+            <button type="button" data-p="libre" onclick="proporcionRecorte('libre')">Libre</button>
+            <button type="button" data-p="1:1" onclick="proporcionRecorte('1:1')">1:1</button>
+            <button type="button" data-p="16:9" onclick="proporcionRecorte('16:9')">16:9</button>
+            <button type="button" data-p="9:16" onclick="proporcionRecorte('9:16')">9:16</button>
+            <button type="button" data-p="4:3" onclick="proporcionRecorte('4:3')">4:3</button>
+            <button type="button" data-p="3:4" onclick="proporcionRecorte('3:4')">3:4</button>
+        </div>
+        <div class="tb-recorte-lienzo" onpointerdown="iniciarArrastreRecorte(event)">
+            <img id="tb-recorte-img" alt="" draggable="false" onload="pintarRecorte()">
+            <div id="tb-recorte-sel" class="tb-recorte-sel">
+                <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i><i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
+            </div>
+        </div>
+        <p class="ayuda"><span id="tb-recorte-medida"></span> · Arrastra el recuadro o sus esquinas.</p>
+        <div class="adm-botones">
+            <button type="button" class="btn-generar" onclick="aplicarRecorte()">RECORTAR</button>
+            <button type="button" id="tb-recorte-deshacer" class="btn-sec" onclick="deshacerRecorte()" hidden><i class="fa-solid fa-rotate-left"></i> Deshacer último recorte</button>
+            <button type="button" class="btn-sec" onclick="cerrarRecorte()">Cancelar</button>
+        </div>
+    </div>
+</div>
 <div id="adm-hoja" class="adm-hoja" hidden onclick="if (event.target === this) admCerrarHoja()">
     <div class="adm-hoja-caja"><button type="button" class="adm-hoja-cerrar" onclick="admCerrarHoja()" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button><div id="adm-hoja-cont"></div></div>
 </div>
@@ -827,8 +861,8 @@
 <script src="js/db.js?v=15"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=44"></script>
-<script src="js/estrategia.js?v=31"></script>
+<script src="js/tablero.js?v=46"></script>
+<script src="js/estrategia.js?v=32"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=18"></script>

@@ -367,6 +367,16 @@ class Tablero {
         if (o && o.t === 'jugador') { this.instantanea(); o.n = et; this.cambio(); }
     }
 
+    // Tras recortar la imagen (cx, cy = esquina del recorte en unidades; f = cuánto se amplía)
+    transformarMarcas(cx, cy, f) {
+        const mover = p => { if (p && p.x !== undefined) { p.x = (p.x - cx) * f; p.y = (p.y - cy) * f; } };
+        this.doc.objetos.forEach(o => {
+            mover(o); mover(o.a); mover(o.b);
+            if (o.pts) o.pts.forEach(mover);
+            if (o.r !== undefined && ['caliente', 'vision', 'segura'].includes(o.t)) o.r *= f;
+        });
+    }
+
     // Intensidad de las zonas calientes nuevas y de la seleccionada
     ponerCalor(nivel) {
         this.estilo.calor = nivel;
@@ -1829,16 +1839,37 @@ class Tablero {
     // Graba el video en el navegador (MP4 si lo soporta, si no WebM)
     // hd = false → 1080 px, 30 fps, ~4 Mbps: liviano y compatible con WhatsApp
     // hd = true  → 1920 px, 60 fps, alta tasa: máxima calidad
+    // Dónde va el informe: 'lado' (video horizontal 16:9) o 'abajo' (vertical 9:16).
+    // En automático, las imágenes más anchas que altas lo llevan debajo.
+    formatoInforme() {
+        const f = this.doc.informe || 'auto';
+        return f === 'auto' ? (TB_ANCHO / this.doc.alto > 1.05 ? 'abajo' : 'lado') : f;
+    }
+
     grabarVideo({ hd = false, titulo = '', alProgreso = () => {} } = {}) {
-        // 16:9 — el mapa a la izquierda y el informe de datos a la derecha
         const fps = hd ? 60 : 30;
         if (typeof MediaRecorder === 'undefined') return Promise.reject(new Error('Este navegador no puede grabar video.'));
         const cv = document.createElement('canvas');
-        cv.height = hd ? 1440 : 1080;
-        cv.width = Math.round(cv.height * 16 / 9);
         const c = cv.getContext('2d');
-        const mapaW = Math.round(Math.min(cv.height * TB_ANCHO / this.doc.alto, cv.width * 0.64) / 2) * 2;
-        const mapaH = mapaW * this.doc.alto / TB_ANCHO, mapaY = (cv.height - mapaH) / 2;
+        const prop = this.doc.alto / TB_ANCHO;      // alto / ancho de la imagen
+        const abajo = this.formatoInforme() === 'abajo';
+        let mapaX = 0, mapaY = 0, mapaW, mapaH, panel;
+        if (abajo) {
+            // 9:16 — la imagen arriba a todo lo ancho y el informe debajo
+            cv.width = hd ? 1440 : 1080;
+            cv.height = Math.round(cv.width * 16 / 9);
+            mapaW = cv.width; mapaH = mapaW * prop;
+            if (mapaH > cv.height * 0.62) { mapaH = cv.height * 0.62; mapaW = mapaH / prop; mapaX = (cv.width - mapaW) / 2; }
+            panel = { x: 0, y: mapaH, w: cv.width, h: cv.height - mapaH, u: cv.width / 100 * 1.35, abajo: true };   // letra más grande para verse en el celular
+        } else {
+            // 16:9 — la imagen a la izquierda y el informe a la derecha
+            cv.height = hd ? 1440 : 1080;
+            cv.width = Math.round(cv.height * 16 / 9);
+            mapaW = Math.min(cv.height / prop, cv.width * 0.64); mapaH = mapaW * prop;
+            mapaY = (cv.height - mapaH) / 2;
+            panel = { x: mapaW, y: 0, w: cv.width - mapaW, h: cv.height, u: cv.height / 100 };
+        }
+        mapaW = Math.round(mapaW); mapaH = Math.round(mapaH); mapaX = Math.round(mapaX); mapaY = Math.round(mapaY);
         const k = mapaW / TB_ANCHO;
         // Full HD a 60 fps: H.264 High (nivel 5.1) si el navegador lo tiene; si no, el siguiente que pueda
         const tipos = hd
@@ -1865,7 +1896,7 @@ class Tablero {
                 cam.y = salida.y + (alto / 2 - salida.y) * s;
                 cam.z = salida.z + (1 - salida.z) * s;
                 const kk = k * cam.z;
-                return { k: kk, W: mapaW, H: cv.height, ox: mapaW / 2 - cam.x * kk, oy: mapaY + mapaH / 2 - cam.y * kk };
+                return { k: kk, W: cv.width, H: cv.height, ox: mapaX + mapaW / 2 - cam.x * kk, oy: mapaY + mapaH / 2 - cam.y * kk };
             }
             let obj = { x: TB_ANCHO / 2, y: alto / 2, z: 1 };
             if (e.cabezas.length) {
@@ -1885,7 +1916,7 @@ class Tablero {
             cam.x = Math.max(mw, Math.min(TB_ANCHO - mw, cam.x));
             cam.y = Math.max(mh, Math.min(alto - mh, cam.y));
             const kk = k * cam.z;
-            return { k: kk, W: mapaW, H: cv.height, ox: mapaW / 2 - cam.x * kk, oy: mapaY + mapaH / 2 - cam.y * kk };
+            return { k: kk, W: cv.width, H: cv.height, ox: mapaX + mapaW / 2 - cam.x * kk, oy: mapaY + mapaH / 2 - cam.y * kk };
         };
 
         const cuadro = t => {
@@ -1893,12 +1924,13 @@ class Tablero {
             const vista = camara(e, t);
             this.doc = { ...real, objetos: e.objetos };
             this._exportando = true; this._enVideo = true;
+            c.fillStyle = '#050508'; c.fillRect(0, 0, cv.width, cv.height);
             c.save();
-            c.beginPath(); c.rect(0, 0, mapaW, cv.height); c.clip();
+            c.beginPath(); c.rect(mapaX, mapaY, mapaW, mapaH); c.clip();
             try { this.dibujar(c, vista); }
             finally { c.restore(); this.doc = real; this._exportando = false; this._enVideo = false; }
-            this._marcaMini(c, mapaW, mapaY + mapaH, cv.height);
-            this._panelVideo(c, mapaW, cv.width, cv.height, { titulo, reloj: e.reloj, eventos, leyenda });
+            this._marcaMini(c, mapaX + mapaW, mapaY + mapaH, abajo ? cv.width : cv.height);
+            this._panelVideo(c, panel, { titulo, reloj: e.reloj, eventos, leyenda });
             if (tiempos.length && t >= finRutas + 2) this._cierreVideo(c, cv.width, cv.height, Math.min(1, (t - finRutas - 2) / 0.6), lugar, tiempos);
             this._rotulos(c, cv.width, cv.height, '', '');
         };
@@ -1960,12 +1992,14 @@ class Tablero {
     }
 
     // Informe de datos a la derecha del video: reloj, pausas en curso, eventos y leyenda
-    _panelVideo(c, x0, W, H, d) {
-        const P = W - x0, u = H / 100, pad = Math.max(u * 2.4, P * 0.06);
-        const x = x0 + pad, w = P - pad * 2;
+    _panelVideo(c, R, d) {
+        const { x: x0, y: y0, w: P, h: Hp, u } = R;
+        const pad = Math.max(u * 2.4, Math.min(P, Hp) * 0.05);
+        const x = x0 + pad, w = P - pad * 2, fondo = y0 + Hp;
         c.save();
-        c.fillStyle = '#07080c'; c.fillRect(x0, 0, P, H);
-        c.fillStyle = '#00f0ff'; c.fillRect(x0, 0, Math.max(2, u * 0.3), H);
+        c.fillStyle = '#07080c'; c.fillRect(x0, y0, P, Hp);
+        c.fillStyle = '#00f0ff';
+        if (R.abajo) c.fillRect(x0, y0, P, Math.max(2, u * 0.3)); else c.fillRect(x0, y0, Math.max(2, u * 0.3), Hp);
         c.textBaseline = 'top';
         const letra = (tam, peso = 700) => { c.font = `${peso} ${tam}px ${TB_FUENTE}`; };
         const recortar = (s, max) => { s = String(s); if (c.measureText(s).width <= max) return s; while (s.length > 1 && c.measureText(s + '…').width > max) s = s.slice(0, -1); return s + '…'; };
@@ -1974,7 +2008,7 @@ class Tablero {
             c.fillStyle = 'rgba(0, 240, 255, 0.25)'; c.fillRect(x, y + u * 2.2, w, 1);
             return y + u * 3.2;
         };
-        let y = pad;
+        let y = y0 + pad;
         // Encabezado
         letra(u * 1.4); c.fillStyle = '#9ca3af'; c.textAlign = 'left'; c.fillText('INFORME DE ROTACIÓN', x, y);
         y += u * 2.4;
@@ -2009,7 +2043,7 @@ class Tablero {
         y += u * 1;
         // Leyenda (abajo, encima de la marca de agua)
         const filaL = u * 3, altoLeyenda = d.leyenda.length ? u * 3.2 + Math.ceil(d.leyenda.length / 2) * filaL : 0;
-        const finEventos = H - u * 9 - altoLeyenda - u * 2;
+        const finEventos = fondo - u * 9 - altoLeyenda - u * 2;
         // Eventos
         if (d.eventos.length) {
             y = titulo('EVENTOS', y);
@@ -2031,7 +2065,7 @@ class Tablero {
             });
         }
         if (d.leyenda.length) {
-            let yl = H - u * 9 - altoLeyenda;
+            let yl = fondo - u * 9 - altoLeyenda;
             yl = titulo('LEYENDA', yl);
             d.leyenda.forEach((it, i) => {
                 const cx = x + (i % 2) * (w / 2), cy = yl + Math.floor(i / 2) * filaL + u * 1.1;
@@ -2143,7 +2177,7 @@ class Tablero {
             if (derecha) { c.textAlign = 'right'; c.fillStyle = '#00f0ff'; c.fillText(derecha, W - h * 0.4, h / 2); }
         }
         // Marca de agua
-        const t = Math.round(H * 0.02), m = Math.round(H * 0.018);
+        const base = Math.min(W, H), t = Math.round(base * 0.02), m = Math.round(base * 0.018);
         c.font = `700 ${t}px ${TB_FUENTE}`;
         const usuario = TB_CREADOR.usuario;
         const anchoTxt = c.measureText(usuario).width;
