@@ -2010,7 +2010,6 @@ class Tablero {
 
     grabarVideo({ hd = false, titulo = '', alProgreso = () => {}, contenido = null } = {}) {
         const fps = hd ? 60 : 30;
-        if (typeof MediaRecorder === 'undefined') return Promise.reject(new Error('Este navegador no puede grabar video.'));
         const cv = document.createElement('canvas');
         const c = cv.getContext('2d');
         const prop = this.doc.alto / TB_ANCHO;      // alto / ancho de la imagen
@@ -2033,12 +2032,6 @@ class Tablero {
         }
         mapaW = Math.round(mapaW); mapaH = Math.round(mapaH); mapaX = Math.round(mapaX); mapaY = Math.round(mapaY);
         const k = mapaW / TB_ANCHO;
-        // Full HD a 60 fps: H.264 High (nivel 5.1) si el navegador lo tiene; si no, el siguiente que pueda
-        const tipos = hd
-            ? ['video/mp4;codecs=avc1.640033', 'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
-            : ['video/mp4;codecs=avc1.4D4028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
-        const tipo = tipos.find(t => MediaRecorder.isTypeSupported(t));
-        if (!tipo) return Promise.reject(new Error('Este navegador no puede grabar video.'));
         const { total, estado, finRutas, tiempos, eventos } = this._guionVideo();
         const lugar = this.modo === 'mapa' ? this.mapaActual.toUpperCase() : 'VISTA AÉREA';
         const leyenda = this._leyendaPanel();
@@ -2133,6 +2126,58 @@ class Tablero {
         };
         const cuadroFinal = t => t < INTRO ? cuadroIntro(t) : cuadro(t - INTRO);
 
+        // Primero cuadro por cuadro (fluido aunque el equipo sea lento); si no se puede, grabación en tiempo real
+        const reiniciar = () => { cam.x = TB_ANCHO / 2; cam.y = alto / 2; cam.z = 1; tPrevio = 0; salida = null; };
+        return this._codificarCuadros(cv, fps, totalV, cuadroFinal, alProgreso, hd)
+            .catch(e => { console.warn('WebCodecs falló, se usa MediaRecorder', e); return null; })
+            .then(r => { if (r) return r; reiniciar(); return this._grabarTiempoReal(cv, fps, hd, totalV, cuadroFinal, alProgreso); });
+    }
+
+    // Codifica cada cuadro con su tiempo exacto (WebCodecs + MP4): no se pierden cuadros en celulares
+    async _codificarCuadros(cv, fps, totalV, cuadroFinal, alProgreso, hd) {
+        if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') return null;
+        const bitrate = hd ? Math.round(cv.width * cv.height * fps * 0.05) : 8e6;
+        const codecs = hd ? ['avc1.640033', 'avc1.640034', 'avc1.4D4033', 'avc1.42E033'] : ['avc1.640028', 'avc1.4D4028', 'avc1.42E028', 'avc1.42E01F'];
+        let config = null;
+        for (const codec of codecs) {
+            const cfg = { codec, width: cv.width, height: cv.height, bitrate, framerate: fps, avc: { format: 'avc' } };
+            try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) { config = cfg; break; } } catch (e) {}
+        }
+        if (!config) return null;
+        const M = await tbCargarMuxer();
+        const muxer = new M.Muxer({ target: new M.ArrayBufferTarget(), video: { codec: 'avc', width: cv.width, height: cv.height, frameRate: fps }, fastStart: 'in-memory' });
+        let fallo = null;
+        const enc = new VideoEncoder({ output: (ch, meta) => muxer.addVideoChunk(ch, meta), error: e => { fallo = e; } });
+        enc.configure(config);
+        const dur = 1e6 / fps;
+        const n = Math.ceil((totalV + 0.6) * fps);   // + un momento con el mapa completo al final
+        try {
+            for (let i = 0; i <= n; i++) {
+                if (fallo) throw fallo;
+                cuadroFinal(Math.min(i / fps, totalV));
+                const fr = new VideoFrame(cv, { timestamp: Math.round(i * dur), duration: Math.round(dur) });
+                enc.encode(fr, { keyFrame: i % (fps * 2) === 0 });
+                fr.close();
+                alProgreso(Math.min(1, i / n));
+                // No acumula cuadros si el codificador va atrás y deja respirar la pantalla
+                while (enc.encodeQueueSize > 3 && !fallo) await tbRespiro();
+                if (i % 3 === 0) await tbRespiro();
+            }
+            await enc.flush();
+        } finally { if (enc.state !== 'closed') enc.close(); }
+        if (fallo) throw fallo;
+        muxer.finalize();
+        return { blob: new Blob([muxer.target.buffer], { type: 'video/mp4' }), ext: 'mp4', segundos: totalV };
+    }
+
+    // Respaldo: graba la pantalla en tiempo real (navegadores sin WebCodecs)
+    _grabarTiempoReal(cv, fps, hd, totalV, cuadroFinal, alProgreso) {
+        if (typeof MediaRecorder === 'undefined') return Promise.reject(new Error('Este navegador no puede grabar video.'));
+        const tipos = hd
+            ? ['video/mp4;codecs=avc1.640033', 'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+            : ['video/mp4;codecs=avc1.4D4028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+        const tipo = tipos.find(t => MediaRecorder.isTypeSupported(t));
+        if (!tipo) return Promise.reject(new Error('Este navegador no puede grabar video.'));
         return new Promise((resolve, reject) => {
             const flujo = cv.captureStream(fps);
             const rec = new MediaRecorder(flujo, { mimeType: tipo, videoBitsPerSecond: hd ? Math.round(cv.width * cv.height * fps * 0.05) : 6e6 });
@@ -2645,3 +2690,21 @@ function relojTxt(seg) {
     seg = Math.max(0, Math.round(seg));
     return seg < 60 ? `${seg}s` : `${Math.floor(seg / 60)}m ${String(seg % 60).padStart(2, '0')}s`;
 }
+
+// Empaquetador MP4 para WebCodecs (se carga solo la primera vez que se graba un video)
+function tbCargarMuxer() {
+    if (window.Mp4Muxer) return Promise.resolve(window.Mp4Muxer);
+    if (!tbCargarMuxer.p) tbCargarMuxer.p = new Promise((ok, mal) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.min.js';
+        s.onload = () => window.Mp4Muxer ? ok(window.Mp4Muxer) : mal(new Error('No cargó el empaquetador de video'));
+        s.onerror = () => { tbCargarMuxer.p = null; mal(new Error('No cargó el empaquetador de video')); };
+        document.head.appendChild(s);
+    });
+    return tbCargarMuxer.p;
+}
+
+// Pausa mínima para que la pantalla se actualice (no la frena el navegador como setTimeout)
+const tbCanal = new MessageChannel(), tbEsperas = [];
+tbCanal.port1.onmessage = () => { const f = tbEsperas.shift(); if (f) f(); };
+function tbRespiro() { return new Promise(r => { tbEsperas.push(r); tbCanal.port2.postMessage(0); }); }
