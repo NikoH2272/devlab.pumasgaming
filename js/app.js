@@ -98,10 +98,12 @@ function entrar() {
     const u = Auth.usuario;
     $('#user-chip').innerHTML = `<strong>${esc(u.nombre)}</strong><small>@${esc(u.usuario)} · ${ROLES[u.rol].nombre}</small>`;
     $('#tb-usuario').innerHTML = `<i class="fa-solid ${ROLES[u.rol].icono}"></i> ${esc(u.nombre)} <span class="rol-tag rol-${u.rol}">${ROLES[u.rol].nombre}</span>`;
+    aplicarTemaUsuario();
     pintarSelectorOrg();
     // Mostrar solo lo que el rol puede usar
     $$('[data-permiso]').forEach(el => { el.hidden = !Auth.puede(el.dataset.permiso); });
     aplicarModulos();
+    actualizarTitulosMenu();
     aplicarBotonesAyuda();
     // El manager entra directo al módulo Administrativo
     irA(u.rol === 'manager' && moduloVisible('administrativo') ? 'vista-admin' : 'inicio');
@@ -135,6 +137,56 @@ function aplicarModulos() {
         // Marca para el admin: módulo que nadie más ve
         el.classList.toggle('solo-admin', Auth.esAdmin() && ids.every(id => rolesDeModulo(id).every(r => r === 'admin')));
     });
+    actualizarTitulosMenu();
+}
+
+function actualizarTitulosMenu() {
+    const nav = $('.sb-nav'); if (!nav) return;
+    let titulo = null, tieneAccion = false;
+    const cerrarGrupo = () => { if (titulo) titulo.hidden = !tieneAccion; };
+    [...nav.children].forEach(el => {
+        if (el.hasAttribute('data-nav-group-title')) {
+            cerrarGrupo(); titulo = el; tieneAccion = false;
+        } else if (titulo && el.tagName === 'BUTTON' && !el.hidden) tieneAccion = true;
+    });
+    cerrarGrupo();
+}
+
+const TEMA_DEFECTO_USUARIO = { primary:'#00f0ff', secondary:'#b0b5c0' };
+function claveTemaUsuario() { return `pumasDevLab.temaUsuario.${Auth.usuario?.id || Auth.usuario?.usuario || 'anon'}`; }
+function leerTemaUsuario() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(claveTemaUsuario()) || '{}');
+        return {
+            primary:/^#[\da-f]{6}$/i.test(saved.primary || '') ? saved.primary : TEMA_DEFECTO_USUARIO.primary,
+            secondary:/^#[\da-f]{6}$/i.test(saved.secondary || '') ? saved.secondary : TEMA_DEFECTO_USUARIO.secondary
+        };
+    } catch (_) { return { ...TEMA_DEFECTO_USUARIO }; }
+}
+function aplicarTemaUsuario() {
+    const tema = leerTemaUsuario(), root = document.documentElement;
+    root.style.setProperty('--primary', tema.primary);
+    root.style.setProperty('--secondary', tema.secondary);
+    root.style.setProperty('--borde', `color-mix(in srgb, ${tema.primary} 15%, transparent)`);
+    root.style.setProperty('--borde-medio', `color-mix(in srgb, ${tema.primary} 32%, transparent)`);
+    root.style.setProperty('--borde-fuerte', `color-mix(in srgb, ${tema.primary} 58%, transparent)`);
+    root.style.setProperty('--degradado', `linear-gradient(120deg, ${tema.primary}, ${tema.secondary})`);
+    root.style.setProperty('--brillo', `0 0 0 1px color-mix(in srgb, ${tema.primary} 30%, transparent), 0 10px 34px color-mix(in srgb, ${tema.primary} 14%, transparent)`);
+    const primary = $('#user-theme-primary'), secondary = $('#user-theme-secondary');
+    if (primary) primary.value = tema.primary;
+    if (secondary) secondary.value = tema.secondary;
+}
+function guardarTemaUsuario() {
+    const tema = { primary:$('#user-theme-primary')?.value || TEMA_DEFECTO_USUARIO.primary, secondary:$('#user-theme-secondary')?.value || TEMA_DEFECTO_USUARIO.secondary };
+    try { localStorage.setItem(claveTemaUsuario(), JSON.stringify(tema)); } catch (_) {}
+    aplicarTemaUsuario();
+}
+function restablecerTemaUsuario() {
+    try { localStorage.removeItem(claveTemaUsuario()); } catch (_) {}
+    aplicarTemaUsuario();
+}
+function toggleTemaUsuario() {
+    const panel = $('#sb-theme-panel'); if (panel) panel.hidden = !panel.hidden;
 }
 
 async function cargarModulos() {
@@ -211,6 +263,7 @@ const RENDER_VISTA = {
     'vista-partida': renderRegistroPartida,
     'vista-informe': renderFiltrosInforme,
     'vista-caidas': renderCaidas,
+    'vista-caidas-privados': renderCaidasPrivados,
     'vista-repisa': renderRepisa,
     'vista-formacion-habilidades': formhRenderVista,
     'vista-diapositivas': estudioRenderVistaDiapositivas,
@@ -353,6 +406,14 @@ async function renderCaidas() {
             <i class="fa-solid fa-triangle-exclamation"></i>
             <div><strong>Rosters de la organización con la misma caída</strong><p>${choques.map(esc).join('<br>')}</p></div>
         </div>` : '';
+}
+
+async function renderCaidasPrivados() {
+    if (!window.PumasCaidas) throw new Error('No se pudo cargar el generador de caídas para privados.');
+    window.PumasCaidas.montar('caidas-privados-mount');
+    const equipos = await Auth.equiposVisibles();
+    const caidas = equipos.length ? await DB.caidas(equipos.map(equipo => equipo.id)) : [];
+    window.PumasCaidas.actualizarRosters(equipos, caidas);
 }
 
 async function guardarCaida(teamId, mapa, campo, valor) {

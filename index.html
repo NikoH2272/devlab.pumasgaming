@@ -7,8 +7,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css?v=33">
-    <link rel="stylesheet" href="css/moderno.css?v=33">
+    <link rel="stylesheet" href="css/style.css?v=36">
+    <link rel="stylesheet" href="css/moderno.css?v=35">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -61,6 +61,7 @@
             <i class="fa-solid fa-house"></i><span>Inicio</span>
         </button>
 
+        <div class="sb-titulo" data-nav-group-title><span>Equipo y competencia</span></div>
         <button type="button" data-modulo="vision" data-vista="vista-informe" onclick="irA('vista-informe')" title="Visión del equipo">
             <i class="fa-solid fa-chart-column"></i><span>Visión del equipo</span>
         </button>
@@ -71,15 +72,22 @@
             <button type="button" onclick="irAInforme('inf-diagnostico')">Diagnóstico</button>
             <button type="button" onclick="irAInforme('inf-partidas')">Partidas</button>
         </div>
-
+        <button type="button" data-modulo="equipos" data-vista="vista-equipos" onclick="irA('vista-equipos')" title="Equipos y jugadores">
+            <i class="fa-solid fa-people-group"></i><span>Equipos y jugadores</span>
+        </button>
         <button type="button" data-modulo="caidas" data-vista="vista-caidas" onclick="irA('vista-caidas')" title="Caídas">
             <i class="fa-solid fa-parachute-box"></i><span>Caídas</span>
+        </button>
+        <button type="button" data-modulo="caidas" data-vista="vista-caidas-privados" onclick="irA('vista-caidas-privados')" title="Caídas para privados">
+            <i class="fa-solid fa-users-line"></i><span>Caídas para privados</span>
         </button>
         <button type="button" data-modulo="partidas" data-vista="vista-partida" onclick="irA('vista-partida')" title="Partidas">
             <i class="fa-solid fa-gamepad"></i><span>Partidas</span>
         </button>
-        <button type="button" data-modulo="equipos" data-vista="vista-equipos" onclick="irA('vista-equipos')" title="Equipos y jugadores">
-            <i class="fa-solid fa-people-group"></i><span>Equipos y jugadores</span>
+
+        <div class="sb-titulo" data-nav-group-title><span>Gestión</span></div>
+        <button type="button" data-modulo="administrativo" data-vista="vista-admin" onclick="irA('vista-admin')" title="Administrativo">
+            <i class="fa-solid fa-folder-open"></i><span>Administrativo</span>
         </button>
         <button type="button" data-vista="vista-usuarios" data-permiso="usuario.ver" onclick="irA('vista-usuarios')" title="Usuarios">
             <i class="fa-solid fa-user-shield"></i><span>Usuarios</span>
@@ -91,20 +99,15 @@
             <i class="fa-solid fa-gear"></i><span>Ajustes</span>
         </button>
 
-        <div class="sb-titulo" data-modulo="administrativo"><span>Gestión</span></div>
-        <button type="button" data-modulo="administrativo" data-vista="vista-admin" onclick="irA('vista-admin')" title="Administrativo">
-            <i class="fa-solid fa-folder-open"></i><span>Administrativo</span>
-        </button>
-
-        <div class="sb-titulo" data-modulo="estrategia mapstream estadisticas"><span>Estrategia</span></div>
+        <div class="sb-titulo" data-nav-group-title><span>Estrategia</span></div>
         <button type="button" data-modulo="estrategia" data-vista="vista-tablero" data-modo="mapa" onclick="abrirEstrategia('mapa')" title="Mapas">
             <i class="fa-solid fa-map-location-dot"></i><span>Mapas</span>
         </button>
-        <button type="button" data-modulo="estrategia" data-vista="vista-tablero" data-modo="aerea" onclick="abrirEstrategia('aerea')" title="Vistas aéreas">
-            <i class="fa-solid fa-satellite"></i><span>Vistas aéreas</span>
-        </button>
         <button type="button" id="btn-mapeador" data-modulo="estrategia" data-vista="vista-tablero" data-modo="mapa" onclick="abrirMapeador()" title="Mapeador de caídas, UAV y tiempos">
             <i class="fa-solid fa-crosshairs"></i><span>Mapeador</span>
+        </button>
+        <button type="button" data-modulo="estrategia" data-vista="vista-tablero" data-modo="aerea" onclick="abrirEstrategia('aerea')" title="Vistas aéreas">
+            <i class="fa-solid fa-satellite"></i><span>Vistas aéreas</span>
         </button>
         <button type="button" data-modulo="estrategia" data-vista="vista-formacion-habilidades" onclick="irA('vista-formacion-habilidades')" title="Plantilla de habilidades por puesto">
             <i class="fa-solid fa-people-group"></i><span>Formación del equipo</span>
@@ -115,6 +118,8 @@
         <button type="button" data-modulo="estrategia" data-vista="vista-repisa" onclick="irA('vista-repisa')" title="Repisa">
             <i class="fa-solid fa-box-archive"></i><span>Repisa</span>
         </button>
+
+        <div class="sb-titulo" data-nav-group-title><span>Análisis</span></div>
         <button type="button" data-modulo="mapstream" data-vista="vista-mapstream" onclick="abrirMapStream()" title="MapStream">
             <i class="fa-solid fa-film"></i><span>MapStream</span>
         </button>
@@ -122,7 +127,6 @@
             <i class="fa-solid fa-table-list"></i><span>Estadísticas CSV</span>
         </button>
 
-        <div class="sb-titulo" data-modulo="herramientas"><span>Herramientas</span></div>
         <button type="button" data-modulo="herramientas" data-vista="modulo-resultados" onclick="mostrarSeccion('modulo-resultados', 'sec-resultados')" title="Resultados (logs)">
             <i class="fa-solid fa-table-cells"></i><span>Resultados (logs)</span>
         </button>
@@ -144,6 +148,15 @@
         <a id="btn-whatsapp" class="sb-boton sb-whatsapp" target="_blank" rel="noopener noreferrer" title="Canal de WhatsApp" hidden>
             <i class="fa-brands fa-whatsapp"></i><span>Canal de WhatsApp</span>
         </a>
+        <button type="button" class="sb-boton" onclick="toggleTemaUsuario()" title="Personalizar colores">
+            <i class="fa-solid fa-palette"></i><span>Personalizar colores</span>
+        </button>
+        <div class="sb-theme-panel" id="sb-theme-panel" hidden>
+            <label>Color principal<input id="user-theme-primary" type="color" value="#00f0ff" oninput="guardarTemaUsuario()"></label>
+            <label>Color secundario<input id="user-theme-secondary" type="color" value="#b0b5c0" oninput="guardarTemaUsuario()"></label>
+            <button type="button" class="btn-link" onclick="restablecerTemaUsuario()">Restablecer colores</button>
+            <small>Se guarda para tu cuenta en este navegador.</small>
+        </div>
         <div class="sb-usuario" id="user-chip"></div>
         <button class="sb-boton" onclick="cerrarSesion()" title="Cerrar sesión">
             <i class="fa-solid fa-right-from-bracket"></i><span>Cerrar sesión</span>
@@ -193,6 +206,15 @@
         <p class="tool-desc">Zona principal y alterna de cada roster en cada mapa. El CEO y el manager ven todos los rosters de la organización; el coach edita los suyos.</p>
         <div id="alertas-caidas"></div>
         <div class="tool-container" id="tabla-caidas"></div>
+    </div>
+</section>
+
+<!-- ================= CAÍDAS PARA PRIVADOS ================= -->
+<section id="vista-caidas-privados" class="view-section">
+    <div class="contenedor">
+        <h2 class="section-title">Caídas para privados</h2>
+        <p class="tool-desc">Organiza las caídas de 12 o 15 equipos para partidas privadas. Puedes descargar la tabla y los cinco mapas juntos.</p>
+        <div class="tool-container" id="caidas-privados-mount"></div>
     </div>
 </section>
 
@@ -936,7 +958,7 @@
     <img alt="Captura del marcador">
 </div>
 
-<script src="js/config.js?v=21"></script>
+<script src="js/config.js?v=22"></script>
 <script src="js/db.js?v=15"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
@@ -944,7 +966,7 @@
 <script src="js/estrategia.js?v=39"></script>
 <script src="js/mapeador-caidas-data.js?v=1"></script>
 <script src="js/mapeador-caidas-analisis.js?v=4"></script>
-<script src="js/mapeador-caidas.js?v=24"></script>
+<script src="js/mapeador-caidas.js?v=25"></script>
 <script src="js/estudio.js?v=7"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
@@ -954,7 +976,8 @@
 <script src="js/estadisticas-vista.js?v=4"></script>
 <script src="js/resultados.js?v=14"></script>
 <script src="js/administrativo.js?v=1"></script>
-<script src="js/app.js?v=20"></script>
+<script src="js/caidas-privados.js?v=3"></script>
+<script src="js/app.js?v=23"></script>
 <script src="js/animaciones.js?v=14"></script>
 </body>
 </html>

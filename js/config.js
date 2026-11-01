@@ -19,7 +19,7 @@ const DOMINIO_USUARIOS = 'usuarios.pumasgaming.com';
 const TODOS_LOS_ROLES = ['admin', 'ceo', 'manager', 'coach', 'analista'];
 const MODULOS = {
     vision:       { n: 'Visión del equipo',   detalle: 'Dashboard, jugadores, combate, diagnóstico y partidas', vistas: ['vista-informe'], roles: TODOS_LOS_ROLES },
-    caidas:       { n: 'Caídas',              detalle: 'Zona principal y alterna por mapa', vistas: ['vista-caidas'], roles: TODOS_LOS_ROLES },
+    caidas:       { n: 'Caídas',              detalle: 'Caídas por roster y partidas privadas', vistas: ['vista-caidas', 'vista-caidas-privados'], roles: TODOS_LOS_ROLES },
     partidas:     { n: 'Partidas',            detalle: 'Registro de partidas y lectura con IA', vistas: ['vista-partida'], roles: TODOS_LOS_ROLES },
     equipos:      { n: 'Equipos y jugadores', detalle: 'Rosters y jugadores', vistas: ['vista-equipos'], roles: TODOS_LOS_ROLES },
     estrategia:   { n: 'Estrategia',          detalle: 'Mapas, Mapeador, formación del equipo, diapositivas y repisa', vistas: ['vista-tablero', 'vista-repisa', 'vista-formacion-habilidades', 'vista-diapositivas'], roles: ['admin'] },

@@ -152,10 +152,12 @@ input[type="range"] { accent-color: var(--primary); }
 .sb-nav > button { border-radius: var(--radio-sm); position: relative; }
 .sb-nav > button i { transition: transform 0.25s var(--ease-rebote), color 0.2s; }
 .sb-nav > button:hover i { transform: translateX(2px) scale(1.12); }
+.sb-nav > button:hover { background: color-mix(in srgb, var(--primary) 7%, transparent); }
 .sb-nav > button.activo {
-    background: linear-gradient(90deg, rgba(0, 240, 255, 0.16), rgba(61, 123, 255, 0.06));
-    border-color: rgba(0, 240, 255, 0.35);
-    box-shadow: 0 0 22px rgba(0, 240, 255, 0.12);
+    color: var(--primary);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 16%, transparent), color-mix(in srgb, var(--primary) 6%, transparent));
+    border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--primary) 12%, transparent);
 }
 .sb-nav > button.activo::before {
     content: ''; position: absolute; left: -12px; top: 18%; bottom: 18%; width: 3px; border-radius: 0 3px 3px 0;
