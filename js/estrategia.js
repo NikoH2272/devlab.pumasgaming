@@ -20,7 +20,9 @@ function orgDeTrabajo() {
 
 // ---------- Apertura ----------
 async function abrirEstrategia(tipo, registro = null) {
-    if (tbSinGuardar && !confirm('Hay cambios sin guardar en el plano abierto. ¿Descartarlos?')) return;
+    if (tbSinGuardar && !confirm('Hay cambios sin guardar en el plano abierto. ¿Descartarlos?')) return false;
+    delete $('#vista-tablero').dataset.mapeador;
+    if ($('#tb-btn-analisis-caidas')) $('#tb-btn-analisis-caidas').hidden = true;
     await irA('vista-tablero');
     if (!tablero) {
         tablero = new Tablero($('#tb-canvas'), { alCambiar: alCambiarTablero, alSeleccionarEquipo: pintarEquiposTablero, alSeleccionar: () => { sincronizarPausa(); sincronizarJugador(); } });
@@ -36,7 +38,7 @@ async function abrirEstrategia(tipo, registro = null) {
     $('#tb-titulo').textContent = tipo === 'mapa' ? 'Mapas · caídas y rotaciones' : 'Vistas aéreas';
 
     // Un plano siempre vive en la organización activa
-    if (registro && registro.orgId !== Auth.orgActivaId) return toast('Ese plano es de otra organización.', 'error');
+    if (registro && registro.orgId !== Auth.orgActivaId) { toast('Ese plano es de otra organización.', 'error'); return false; }
     tbActual = { id: registro?.id || null, tipo, orgId: Auth.orgActivaId, fondo: registro?.fondo || null };
     $('#tb-nombre').value = registro?.nombre || '';
     $('#tb-img-mapa-caja').hidden = !['admin', 'ceo', 'coach'].includes(Auth.usuario.rol);
@@ -60,6 +62,30 @@ async function abrirEstrategia(tipo, registro = null) {
     setTimeout(pintarFormatoInforme, 150);
     pintarContenido();
     pintarLinea();
+    return true;
+}
+
+// Mapeador usa el plano de estrategia completo: caídas por equipo, rivales,
+// UAV y la línea de tiempo editable del mismo documento.
+async function abrirMapeador() {
+    const abierto = await abrirEstrategia('mapa');
+    if (!abierto || !tablero) return;
+    $('#vista-tablero').dataset.mapeador = 'caidas';
+    $$('[data-vista="vista-tablero"]').forEach(b => b.classList.toggle('activo', b.id === 'btn-mapeador'));
+    $('#tb-titulo').textContent = 'Mapeador · caídas, UAV y tiempos';
+    $('#tb-nombre').placeholder = 'Partida / torneo / ronda';
+    $('#tb-btn-linea').title = 'Anotar tiempos y eventos de la partida';
+    if (typeof window.mapeadorRenderCaidas === 'function') window.mapeadorRenderCaidas();
+}
+
+async function mapeadorAbrirPlano() {
+    const abierto = await abrirEstrategia('mapa');
+    if (!abierto) return;
+    $$('.sb-nav > button[data-vista="vista-tablero"]').forEach(b => b.classList.toggle('activo', b.id === 'btn-mapeador'));
+    $('#tb-titulo').textContent = 'Mapeador de partida · UAV y tiempos';
+    $('#tb-nombre').placeholder = 'Partida / torneo / ronda';
+    $('#tb-btn-linea').title = 'Anotar tiempos y eventos de la partida';
+    $('#tb-btn-analisis-caidas').hidden = false;
 }
 
 // Imagen subida por la organización; si no hay, la incluida en iconosobs/mapas
@@ -916,6 +942,7 @@ function limpiarTablero() {
 
 // ---------- Repisa ----------
 async function renderRepisa() {
+    if (typeof window.mapeadorRepisaRender === 'function') window.mapeadorRepisaRender();
     const f = $('#repisa-filtros');
     if (!f.mapa.options.length) {
         f.mapa.innerHTML = '<option value="">Todos los mapas</option>' + CATALOGO.mapas.map(m => `<option value="${m}">${m}</option>`).join('');
@@ -949,12 +976,46 @@ async function renderRepisa() {
                 <small>${roster ? esc(roster.nombre) + ' · ' : ''}${autor ? '@' + esc(autor.usuario) + ' · ' : ''}${new Date(t.actualizado).toLocaleDateString('es')}</small>
             </div>
             <div class="repisa-acciones">
+                <button type="button" class="btn-link" onclick="abrirDeRepisa('${t.id}')" title="Abrir para editar" aria-label="Editar ${esc(t.nombre)}"><i class="fa-solid fa-pencil"></i> Editar</button>
                 <button type="button" class="btn-link" onclick="abrirDeRepisa('${t.id}')">Abrir</button>
                 <button type="button" class="btn-link" onclick="duplicarDeRepisa('${t.id}')">Duplicar</button>
                 ${puedeBorrar ? `<button type="button" class="btn-link" onclick="borrarDeRepisa('${t.id}')">Eliminar</button>` : ''}
             </div>
         </div>`;
     }).join('') : '<p class="vacio">La repisa está vacía. Guarda un mapa o una vista aérea para verlo aquí.</p>';
+}
+
+async function exportarRepisaJSON() {
+    try {
+        const lista = (await DB.tableros()).filter(t => t.orgId === Auth.orgActivaId);
+        const completos = await Promise.all(lista.map(t => DB.tablero(t.id)));
+        const payload = { formato: 'pumas-repisa', version: 1, exportado: new Date().toISOString(), tableros: completos };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = `repisa-pumas-${new Date().toISOString().slice(0,10)}.json`; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast(`${completos.length} elemento(s) exportado(s) de la repisa.`);
+    } catch (err) { toast(err.message, 'error'); }
+}
+
+async function importarRepisaJSON(file) {
+    if (!file) return;
+    if (file.size > 30 * 1024 * 1024) return toast('El archivo supera el límite de 30 MB.', 'error');
+    try {
+        const data = JSON.parse(await file.text());
+        const lista = Array.isArray(data) ? data : data.tableros;
+        if (!Array.isArray(lista) || (data.formato && data.formato !== 'pumas-repisa')) throw new Error('El JSON no tiene una repisa Pumas válida.');
+        const validos = lista.filter(t => ['mapa', 'aerea'].includes(t.tipo) && t.nombre && t.datos);
+        if (!validos.length) throw new Error('El archivo no contiene planos importables.');
+        if (!confirm(`Se importarán ${validos.length} elemento(s) a la organización actual. ¿Continuar?`)) return;
+        let hechos = 0;
+        for (const t of validos) {
+            await DB.guardarTablero({ ...t, id: null, orgId: Auth.orgActivaId, teamId: null });
+            hechos++;
+        }
+        toast(`${hechos} elemento(s) importado(s) en la repisa.`);
+        await renderRepisa();
+    } catch (err) { toast(err.message || 'No se pudo leer el archivo.', 'error'); }
 }
 
 async function abrirDeRepisa(id) {

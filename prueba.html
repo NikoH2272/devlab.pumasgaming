@@ -1122,6 +1122,26 @@
   .comp-head p { margin: 0; color: var(--text2); font-size: 12.5px; }
   .comp-head-actions { display: flex; gap: 8px; }
   .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .comp-saved { margin-top: 18px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .comp-repisa-item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .comp-repisa-item:last-child { border-bottom: 0; }
+  .comp-repisa-item > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .comp-repisa-item small { color: var(--text3); }
+  .comp-repisa-item button { flex: none; }
+  .mapd-controls, .mapd-tools { display:flex; align-items:end; flex-wrap:wrap; gap:10px; margin:12px 0; }
+  .mapd-controls label { display:flex; flex-direction:column; gap:5px; color:var(--text2); font-size:11px; font-weight:700; }
+  .mapd-controls input:not([type=range]), .mapd-controls select, #mapdSavedSelect { min-height:36px; padding:6px 9px; color:var(--text); background:var(--surface); border:1px solid var(--border2); border-radius:7px; }
+  .mapd-upload input { max-width:190px; }
+  .mapd-tools .active { border-color:var(--accent); color:var(--accent); }
+  .mapd-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(250px, .8fr); gap:14px; align-items:start; }
+  .mapd-canvas-wrap { overflow:hidden; border:1px solid var(--border); border-radius:12px; background:#17212c; }
+  #mapdCanvas { display:block; width:100%; height:auto; aspect-ratio:16/9; cursor:crosshair; touch-action:none; }
+  .mapd-events { max-height:540px; overflow:auto; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+  .mapd-events h3 { margin:0 0 6px; }
+  .mapd-event { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border); font-size:11px; }
+  .mapd-event span { flex:1; }
+  .mapd-event button { border:0; color:var(--text2); background:transparent; cursor:pointer; }
+  @media(max-width:800px) { .mapd-layout { grid-template-columns:1fr; } .mapd-events { max-height:260px; } }
   .comp-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
     padding: 20px; display: flex; flex-direction: column; gap: 18px;
@@ -7407,7 +7427,8 @@
     <div class="subtab active" data-sub="home" id="rotaSubtabHome" onclick="switchRotaSub('home')" data-i18n="st_sub_titulo">Home</div>
     <div class="subtab" data-sub="mapeamento" id="rotaSubtabMapeamento" onclick="switchRotaSub('mapeamento')" data-i18n="mp_sub_titulo">Criar</div>
     <div class="subtab" data-sub="desenhar" onclick="switchRotaSub('desenhar')" data-i18n="rd_sub_desenhar">Desenhar</div>
-    <div class="subtab" data-sub="composicao" id="rotaSubtabComposicao" onclick="switchRotaSub('composicao')" data-i18n="cp_sub_titulo">Composição</div>
+    <div class="subtab" data-sub="composicao" id="rotaSubtabComposicao" onclick="switchRotaSub('composicao')" data-i18n="cp_sub_titulo">Composición</div>
+    <div class="subtab" data-sub="mapeador" id="rotaSubtabMapeador" onclick="switchRotaSub('mapeador')">Mapeador</div>
     <div class="subtab" data-sub="quebra" id="rotaSubtabQuebra" onclick="switchRotaSub('quebra')" data-i18n="qc_sub_titulo">Quebra de Call</div>
     <div class="subtab" data-sub="comparison" id="rotaSubtabComparison" onclick="switchRotaSub('comparison')">Player Comparison</div>
   </div>
@@ -7560,8 +7581,8 @@
       <p data-i18n="cp_subtitulo">Monte a formação combinando personagem, habilidade, pet e item por jogador.</p>
     </div>
     <div class="comp-head-actions">
-      <button type="button" class="btn-team-action btn-log" onclick="compSalvarComposicao()">▣ Salvar composição</button>
-      <button type="button" class="btn-team-action" onclick="compCarregarComposicao()">▱ Carregar composição</button>
+      <button type="button" class="btn-team-action btn-log" onclick="compSalvarComposicao()">▣ Guardar en la repisa</button>
+      <button type="button" class="btn-team-action" onclick="compExportarAnalisis()">✦ Copiar análisis para Gemini</button>
       <button type="button" class="btn-team-action" onclick="compResetar()" data-i18n="cp_resetar">↺ Resetar</button>
     </div>
   </div>
@@ -7569,7 +7590,7 @@
     <main class="comp-builder-main">
       <div class="comp-grid" id="compGrid"></div>
       <section class="comp-library" id="compLibrary"></section>
-      <section class="comp-saved" id="compSaved"></section>
+      <section class="comp-saved" id="compSaved" aria-live="polite"></section>
     </main>
     <aside class="comp-analysis" id="compAnalysis"></aside>
   </div>
@@ -7600,6 +7621,35 @@
 </div>
 </div>
 <!-- fim sub-rota-composicao -->
+
+<div id="sub-rota-mapeador" class="subpanel">
+  <div class="comp-layout">
+    <div class="comp-head"><div><h2>Mapeador de partida</h2><p>Registra caídas del equipo y rivales, actividad UAV y tiempos en un mismo mapa.</p></div></div>
+    <div class="mapd-controls">
+      <label>Partida <input id="mapdMatchName" type="text" placeholder="Torneo · ronda · partida"></label>
+      <label>Mapa <select id="mapdMap" onchange="mapdSetMapa(this.value)"><option>Bermuda</option><option>Purgatorio</option><option>Kalahari</option><option>Nova Terra</option><option>Solara</option></select></label>
+      <label>Tiempo de partida <input id="mapdTime" type="text" inputmode="numeric" placeholder="00:00" value="00:00"></label>
+      <label>Radio UAV <input id="mapdUavRadius" type="range" min="25" max="220" value="95"></label>
+      <label>Equipo / nota del evento <input id="mapdEventNote" type="text" placeholder="Nombre del rival o detalle"></label>
+      <label class="mapd-upload">Cargar imagen del mapa <input id="mapdMapFile" type="file" accept="image/*" onchange="mapdCargarFondo(this.files[0])"></label>
+    </div>
+    <div class="mapd-tools" role="group" aria-label="Tipo de marcador">
+      <button type="button" class="btn-team-action active" data-mapd-type="equipo" onclick="mapdSetTipo('equipo')">🟢 Caída de mi equipo</button>
+      <button type="button" class="btn-team-action" data-mapd-type="enemigo" onclick="mapdSetTipo('enemigo')">🔴 Caída enemiga</button>
+      <button type="button" class="btn-team-action" data-mapd-type="uav" onclick="mapdSetTipo('uav')">📡 UAV / escaneo</button>
+      <button type="button" class="btn-team-action" onclick="mapdAnotarTiempo('inicio')">▶ Marcar inicio</button>
+      <button type="button" class="btn-team-action" onclick="mapdAnotarTiempo('fin')">■ Marcar fin</button>
+      <button type="button" class="btn-team-action" onclick="mapdDeshacer()">↩ Deshacer</button>
+      <button type="button" class="btn-team-action btn-log" onclick="mapdGuardar()">💾 Guardar partida</button>
+      <select id="mapdSavedSelect" onchange="mapdCargarGuardada(this.value)"><option value="">Partidas guardadas…</option></select>
+    </div>
+    <div class="mapd-layout">
+      <div class="mapd-canvas-wrap"><canvas id="mapdCanvas" width="960" height="540" aria-label="Mapa de partida; haz clic para colocar un evento"></canvas></div>
+      <aside class="mapd-events"><h3>Eventos de partida</h3><p class="comp-muted">Elige un tipo, ajusta el tiempo y pulsa el punto correspondiente del mapa.</p><div id="mapdEventList"></div></aside>
+    </div>
+  </div>
+</div>
+<!-- fin sub-rota-mapeador -->
 
 <div id="sub-rota-quebra" class="subpanel">
 <div class="qc-layout">
@@ -16932,7 +16982,186 @@ function compRender() {
   const host = document.getElementById('compGrid');
   if (!host) return;
   host.innerHTML = compState.map((card, idx) => compCardHtml(card, idx)).join('');
+  compRenderRepisa();
 }
+
+// Repisa local de formaciones: permite guardar varios planes con nombre en este navegador.
+const COMP_REPISA_KEY = 'qgtatics_repisa_composiciones_v1';
+let compEditandoId = null;
+function compLeerRepisa() {
+  try {
+    const datos = JSON.parse(localStorage.getItem(COMP_REPISA_KEY) || '[]');
+    return Array.isArray(datos) ? datos : [];
+  } catch { return []; }
+}
+function compSalvarComposicao() {
+  const repisa = compLeerRepisa();
+  const actual = repisa.find(x => x.id === compEditandoId);
+  const nombre = prompt(actual ? 'Editar nombre de la formación:' : 'Nombre de esta formación (por ejemplo: Rush Bermuda):', actual?.nombre || '');
+  if (!nombre || !nombre.trim()) return;
+  const ficha = { id: actual?.id || (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`), nombre: nombre.trim().slice(0, 60),
+    creada: actual?.creada || new Date().toISOString(), actualizada: new Date().toISOString(), equipo: JSON.parse(JSON.stringify(compState)) };
+  if (actual) repisa[repisa.indexOf(actual)] = ficha; else repisa.unshift(ficha);
+  try {
+    localStorage.setItem(COMP_REPISA_KEY, JSON.stringify(repisa));
+    compEditandoId = null;
+    compRenderRepisa();
+    showToast(actual ? 'Formación actualizada.' : 'Formación guardada en la repisa.');
+  } catch { alert('No se pudo guardar. El almacenamiento del navegador puede estar lleno.'); }
+}
+function compCarregarComposicao(id) {
+  const item = compLeerRepisa().find(x => x.id === id);
+  if (!item || !Array.isArray(item.equipo) || item.equipo.length !== 4) return;
+  compState = item.equipo;
+  compEditandoId = null;
+  compSave();
+  compRender();
+}
+function compEditarComposicao(id) {
+  compCarregarComposicao(id);
+  compEditandoId = id;
+  const nombre = compLeerRepisa().find(x => x.id === id)?.nombre || '';
+  showToast(`Editando «${nombre}». Pulsa «Guardar en la repisa» para actualizarla.`);
+  document.getElementById('compGrid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function compExcluirComposicao(id) {
+  const item = compLeerRepisa().find(x => x.id === id);
+  if (!item || !confirm(`¿Eliminar «${item.nombre}» de la repisa?`)) return;
+  localStorage.setItem(COMP_REPISA_KEY, JSON.stringify(compLeerRepisa().filter(x => x.id !== id)));
+  if (compEditandoId === id) compEditandoId = null;
+  compRenderRepisa();
+}
+function compRenderRepisa() {
+  const host = document.getElementById('compSaved');
+  if (!host) return;
+  const repisa = compLeerRepisa();
+  host.innerHTML = `<div class="comp-section-label"><span>REPISA DE FORMACIONES</span><span class="comp-muted">${repisa.length} guardada(s)</span></div>` +
+    (repisa.length ? repisa.map(x => {
+      const resumen = (x.equipo || []).map(c => funcaoLabel(c.role)).join(' · ');
+      return `<article class="comp-repisa-item"><div><strong>${compEsc(x.nombre)}</strong><small>${compEsc(resumen)}</small></div>
+        <button type="button" class="btn-team-action" onclick="compEditarComposicao('${compEsc(x.id)}')" aria-label="Editar ${compEsc(x.nombre)}" title="Editar formación">✏️</button>
+        <button type="button" class="btn-team-action" onclick="compCarregarComposicao('${compEsc(x.id)}')">Cargar</button>
+        <button type="button" class="btn-team-action" onclick="compExcluirComposicao('${compEsc(x.id)}')" aria-label="Eliminar ${compEsc(x.nombre)}">Eliminar</button></article>`;
+    }).join('') : '<p class="comp-muted">Aún no hay formaciones guardadas. Pulsa «Guardar en la repisa» para crear una.</p>');
+}
+function compCrearPromptAnalisis() {
+  const equipo = compState.map((c, i) => ({
+    puesto: i + 1,
+    jugador: teamPlayers.find(p => String(p.id) === String(c.playerId))?.name || null,
+    rol_asignado: c.role,
+    personajes_habilidad: c.habilidades.filter(h => h.personagem).map(h => ({
+      personaje: RD_PERSONAGENS_MAP[h.personagem] || h.personagem,
+      slug: h.personagem,
+      tipo_habilidad: COMP_HAB_TIPO[h.personagem] || 'desconocido',
+      activa: Boolean(h.ativa),
+    })),
+    mascota: c.pet || null,
+    item: c.item || null,
+  }));
+  return `Actúa como analista táctico de Free Fire. Analiza la composición JSON incluida abajo.\n\nReglas: identifica el tipo de formación por la distribución de roles y las habilidades elegidas; explica la evidencia. Evalúa cobertura de entrada/rush, soporte, control o granadas, supervivencia, movilidad, información y respuesta a terceros solo cuando los datos disponibles lo permitan. Expón sinergias, huecos, riesgos y 2 ajustes concretos. No inventes efectos de habilidades, mascotas ni objetos: si falta su descripción o no puedes verificarla, marca «dato faltante» y solicita el catálogo de habilidades como fuente. Distingue hechos del juego de inferencias tácticas. No alteres el JSON.\n\nDevuelve: (1) tipo de formación, (2) tabla puesto/rol/personajes/habilidades, (3) sinergias, (4) debilidades, (5) recomendaciones priorizadas.\n\nFORMACIÓN JSON:\n${JSON.stringify(equipo, null, 2)}`;
+}
+async function compExportarAnalisis() {
+  const texto = compCrearPromptAnalisis();
+  try { await navigator.clipboard.writeText(texto); showToast?.('Prompt y formación copiados. Pégalos en Gemini.'); }
+  catch { window.prompt('Copia este texto y pégalo en Gemini:', texto); }
+}
+
+// ── Mapeador: caídas, escaneos UAV y marcas de tiempo por partida ──────────
+const MAPD_KEY = 'qgtatics_mapeador_partidas_v1';
+let mapdTipo = 'equipo', mapdEventos = [], mapdFondo = null, mapdImagen = null;
+const mapdCanvas = document.getElementById('mapdCanvas');
+const mapdCtx = mapdCanvas.getContext('2d');
+function mapdSetTipo(tipo) {
+  mapdTipo = tipo;
+  document.querySelectorAll('[data-mapd-type]').forEach(b => b.classList.toggle('active', b.dataset.mapdType === tipo));
+}
+function mapdTiempoValido(valor) { return /^\d{1,3}:\d{2}$/.test(valor || '') ? valor : '00:00'; }
+function mapdAgregarEvento(evento) {
+  mapdEventos.push({ id: `${Date.now()}-${Math.random()}`, tiempo: mapdTiempoValido(document.getElementById('mapdTime').value), ...evento });
+  mapdRender();
+}
+function mapdAnotarTiempo(tipo) { mapdAgregarEvento({ tipo, nota: '' }); }
+function mapdCargarFondo(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = () => { mapdFondo = reader.result; mapdImagen = new Image(); mapdImagen.onload = mapdRender; mapdImagen.src = mapdFondo; };
+  reader.readAsDataURL(file);
+}
+function mapdSetMapa(nombre) {
+  mapdFondo = null;
+  const claves = { Bermuda:'bermuda', Purgatorio:'purgatorio', Kalahari:'kalahari', 'Nova Terra':'nova terra', Solara:'solara' };
+  try {
+    mapdImagen = new Image();
+    mapdImagen.onload = mapdRender;
+    mapdImagen.onerror = () => { mapdImagen = null; mapdRender(); };
+    mapdImagen.src = `/static/${mapaArquivo(claves[nombre] || nombre.toLowerCase())}`;
+  } catch { mapdImagen = null; mapdRender(); }
+}
+mapdCanvas.addEventListener('click', e => {
+  const r = mapdCanvas.getBoundingClientRect();
+  const x = (e.clientX - r.left) * mapdCanvas.width / r.width;
+  const y = (e.clientY - r.top) * mapdCanvas.height / r.height;
+  mapdAgregarEvento({ tipo: mapdTipo, x, y, radio: Number(document.getElementById('mapdUavRadius').value), nota: document.getElementById('mapdEventNote').value.trim() });
+  document.getElementById('mapdEventNote').value = '';
+});
+function mapdRender() {
+  if (!mapdCanvas) return;
+  const ctx = mapdCtx, w = mapdCanvas.width, h = mapdCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#1c2935'; ctx.fillRect(0, 0, w, h);
+  if (mapdImagen?.complete && mapdImagen.naturalWidth) {
+    const scale = Math.max(w / mapdImagen.naturalWidth, h / mapdImagen.naturalHeight);
+    const iw = mapdImagen.naturalWidth * scale, ih = mapdImagen.naturalHeight * scale;
+    ctx.drawImage(mapdImagen, (w-iw)/2, (h-ih)/2, iw, ih);
+  } else {
+    ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
+    for (let x=0; x<w; x+=48) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+    for (let y=0; y<h; y+=48) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+    ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='bold 18px sans-serif'; ctx.fillText(`${document.getElementById('mapdMap').value} · carga imagen del mapa`, 24, 34);
+  }
+  mapdEventos.forEach((ev, i) => {
+    if (ev.x == null || ev.y == null) return;
+    if (ev.tipo === 'uav') {
+      ctx.beginPath(); ctx.arc(ev.x, ev.y, ev.radio || 95, 0, Math.PI*2); ctx.fillStyle='rgba(38,190,255,.18)'; ctx.fill();
+      ctx.strokeStyle='#26beff'; ctx.setLineDash([8,5]); ctx.lineWidth=3; ctx.stroke(); ctx.setLineDash([]);
+    }
+    const color = ev.tipo === 'equipo' ? '#31e68b' : ev.tipo === 'enemigo' ? '#ff5252' : '#26beff';
+    ctx.beginPath(); ctx.arc(ev.x, ev.y, 15, 0, Math.PI*2); ctx.fillStyle=color; ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#071018'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(ev.tipo === 'uav' ? 'U' : String(i+1), ev.x, ev.y);
+    ctx.textAlign='start'; ctx.textBaseline='alphabetic';
+  });
+  const list = document.getElementById('mapdEventList');
+  const labels = { equipo:'🟢 Caída equipo', enemigo:'🔴 Caída rival', uav:'📡 UAV / escaneo', inicio:'▶ Inicio', fin:'■ Fin' };
+  list.innerHTML = mapdEventos.length ? mapdEventos.map((ev,i) => `<div class="mapd-event"><span><b>${compEsc(ev.tiempo)}</b> · ${labels[ev.tipo]}${ev.nota ? ` · ${compEsc(ev.nota)}` : ''}${ev.x != null ? ` · ${Math.round(ev.x)},${Math.round(ev.y)}` : ''}</span><button type="button" onclick="mapdEliminarEvento(${i})" title="Eliminar evento">✕</button></div>`).join('') : '<p class="comp-muted">Sin eventos. Coloca caídas o escaneos sobre el mapa.</p>';
+}
+function mapdEliminarEvento(i) { mapdEventos.splice(i,1); mapdRender(); }
+function mapdDeshacer() { mapdEventos.pop(); mapdRender(); }
+function mapdLeerGuardadas() { try { const x=JSON.parse(localStorage.getItem(MAPD_KEY)||'[]'); return Array.isArray(x)?x:[]; } catch { return []; } }
+function mapdActualizarSelector() {
+  const sel=document.getElementById('mapdSavedSelect'), datos=mapdLeerGuardadas();
+  sel.innerHTML='<option value="">Partidas guardadas…</option>'+datos.map(x=>`<option value="${compEsc(x.id)}">${compEsc(x.nombre)} · ${compEsc(x.mapa)}</option>`).join('');
+}
+function mapdGuardar() {
+  const name=document.getElementById('mapdMatchName').value.trim();
+  if (!name) { alert('Escribe un nombre para identificar esta partida.'); return; }
+  const datos=mapdLeerGuardadas();
+  const match={id:`${Date.now()}`,nombre:name,mapa:document.getElementById('mapdMap').value,fondo:mapdFondo,eventos:mapdEventos,guardada:new Date().toISOString()};
+  datos.unshift(match);
+  try { localStorage.setItem(MAPD_KEY,JSON.stringify(datos)); mapdActualizarSelector(); showToast('Partida guardada en el Mapeador.'); }
+  catch { alert('No se pudo guardar. La imagen del mapa puede ser demasiado pesada; usa una imagen más liviana.'); }
+}
+function mapdCargarGuardada(id) {
+  if (!id) return;
+  const x=mapdLeerGuardadas().find(m=>m.id===id); if (!x) return;
+  document.getElementById('mapdMatchName').value=x.nombre; document.getElementById('mapdMap').value=x.mapa;
+  mapdEventos=Array.isArray(x.eventos)?x.eventos:[]; mapdFondo=x.fondo||null; mapdImagen=null;
+  if (mapdFondo) { mapdImagen=new Image(); mapdImagen.onload=mapdRender; mapdImagen.src=mapdFondo; }
+  else mapdSetMapa(x.mapa);
+  mapdRender();
+}
+mapdActualizarSelector(); mapdSetMapa(document.getElementById('mapdMap').value);
 
 function addRotaLogoDeArquivo(file, offset = 0) {
   const reader = new FileReader();
@@ -18094,6 +18323,7 @@ function switchRotaSub(name) {
   document.getElementById('sub-rota-home').classList.toggle('active', name === 'home');
   document.getElementById('sub-rota-desenhar').classList.toggle('active', name === 'desenhar');
   document.getElementById('sub-rota-composicao').classList.toggle('active', name === 'composicao');
+  document.getElementById('sub-rota-mapeador').classList.toggle('active', name === 'mapeador');
   document.getElementById('sub-rota-quebra').classList.toggle('active', name === 'quebra');
   document.getElementById('sub-rota-mapeamento').classList.toggle('active', name === 'mapeamento');
   document.getElementById('sub-rota-comparison').classList.toggle('active', name === 'comparison');
@@ -18104,6 +18334,9 @@ function switchRotaSub(name) {
     carregarMapeamentosParaDesenhar();
   } else if (name === 'composicao') {
     compRender();
+  } else if (name === 'mapeador') {
+    mapdRender();
+    mapdActualizarSelector();
   } else if (name === 'quebra') {
     document.getElementById('qcMapSelect').value = currentRotaMap;
     carregarFotosAereas();

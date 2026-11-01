@@ -22,7 +22,7 @@ const MODULOS = {
     caidas:       { n: 'Caídas',              detalle: 'Zona principal y alterna por mapa', vistas: ['vista-caidas'], roles: TODOS_LOS_ROLES },
     partidas:     { n: 'Partidas',            detalle: 'Registro de partidas y lectura con IA', vistas: ['vista-partida'], roles: TODOS_LOS_ROLES },
     equipos:      { n: 'Equipos y jugadores', detalle: 'Rosters y jugadores', vistas: ['vista-equipos'], roles: TODOS_LOS_ROLES },
-    estrategia:   { n: 'Estrategia',          detalle: 'Mapas, vistas aéreas y repisa', vistas: ['vista-tablero', 'vista-repisa'], roles: ['admin'] },
+    estrategia:   { n: 'Estrategia',          detalle: 'Mapas, Mapeador, formación del equipo, diapositivas y repisa', vistas: ['vista-tablero', 'vista-repisa', 'vista-formacion-habilidades', 'vista-diapositivas'], roles: ['admin'] },
     mapstream:    { n: 'MapStream',           detalle: 'Repetición de partidas desde el replay del juego', vistas: ['vista-mapstream'], roles: ['admin'] },
     estadisticas: { n: 'Estadísticas CSV',    detalle: 'Generar el CSV desde el replay y ver estadísticas por partida y torneo', vistas: ['vista-estadisticas'], roles: ['admin'] },
     administrativo: { n: 'Administrativo',    detalle: 'Equipo, miembros, presupuesto en USD, torneos, relámpagos y resultados (entrada del manager)', vistas: ['vista-admin'], roles: ['admin', 'ceo', 'manager'] },

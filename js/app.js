@@ -212,6 +212,8 @@ const RENDER_VISTA = {
     'vista-informe': renderFiltrosInforme,
     'vista-caidas': renderCaidas,
     'vista-repisa': renderRepisa,
+    'vista-formacion-habilidades': formhRenderVista,
+    'vista-diapositivas': estudioRenderVistaDiapositivas,
     'vista-ajustes': renderAjustes,
     'vista-admin': renderAdmin
 };
