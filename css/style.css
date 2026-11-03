@@ -984,8 +984,9 @@ body.cal-monedas-abierto { overflow: hidden; }
 .formh-role-fixed { margin-left:auto; color:var(--secondary); font-size:.8rem; }
 .formh-player-label { display:flex; flex-direction:column; gap:5px; color:var(--gray); font-size:.75rem; }
 .formh-player-label select, .formh-extras select { width:100%; padding:8px; color:var(--light); background:var(--dark); border:1px solid rgba(0,240,255,.22); }
-.formh-extras { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:12px; }
+.formh-extras { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:12px; }
 .formh-extras label { display:flex; flex-direction:column; gap:5px; color:var(--gray); font-size:.75rem; }
+.formh-extra-img { width:44px; height:44px; object-fit:contain; border-radius:8px; background:rgba(255,255,255,.06); padding:3px; }
 .formh-puesto section { margin-top:12px; }
 .formh-puesto section h4 { display:flex; justify-content:space-between; margin:0 0 7px; color:var(--secondary); font-size:.8rem; }
 .formh-puesto section h4 small { color:var(--gray); font-weight:400; }
