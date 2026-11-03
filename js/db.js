@@ -269,6 +269,11 @@ const DB = {
         const fila = {};
         if ('rol' in cambios) fila.rol = cambios.rol;
         if ('activo' in cambios) fila.activo = cambios.activo;
+        if ('nick' in cambios) {
+            const nick = String(cambios.nick || '').trim();
+            if (!nick) throw new Error('El nick no puede quedar vacío.');
+            fila.nick = nick.slice(0, 24);
+        }
         await q(supabaseClient.from('players').update(fila).eq('id', id));
     },
 
@@ -374,6 +379,12 @@ const DB = {
             await supabaseClient.from('matches').delete().eq('id', id);
             throw err;
         }
+    },
+
+    async actualizarFechaHoraPartida(id, fecha, hora) {
+        await q(supabaseClient.rpc('actualizar_fecha_hora_partida', {
+            p_match: id, p_fecha: fecha, p_hora: hora
+        }));
     },
 
     async eliminarPartida(id) {

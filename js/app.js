@@ -880,7 +880,7 @@ async function renderEquipos() {
                 <thead><tr><th>Nick</th><th>Nombre</th><th>Rol</th><th>IGL</th>${editables[t.id] ? '<th></th>' : ''}</tr></thead>
                 <tbody>${ps.map(p => `
                     <tr class="${p.activo ? '' : 'inactivo'}">
-                        <td><strong>${esc(p.nick)}</strong></td>
+                        <td><strong>${esc(p.nick)}</strong>${editables[t.id] ? ` <button type="button" class="btn-link" onclick="editarNickJugador('${p.id}')" title="Actualizar nick"><i class="fa-solid fa-pen-to-square icono-edicion"></i> Editar</button>` : ''}</td>
                         <td>${esc(p.nombre)}</td>
                         <td>${editables[t.id] ? `
                             <select onchange="cambiarRolJugador('${p.id}', this.value)">
@@ -951,6 +951,22 @@ async function marcarIGL(id) {
 async function cambiarRolJugador(id, rol) {
     try { await DB.actualizarJugador(id, { rol }); } catch (err) { toast(err.message, 'error'); renderEquipos(); }
 }
+async function editarNickJugador(id) {
+    try {
+        const jugador = (await DB.jugadores()).find(p => p.id === id);
+        if (!jugador) return toast('No se encontró el jugador.', 'error');
+        if (!(await Auth.puedeEditarEquipo(jugador.teamId))) return toast('No tienes permiso para editar este jugador.', 'error');
+        const respuesta = prompt(`Actualizar nick de ${jugador.nick}:`, jugador.nick || '');
+        if (respuesta === null) return;
+        const nick = respuesta.trim();
+        if (!nick) return toast('El nick no puede quedar vacío.', 'error');
+        if (nick.length > 24) return toast('El nick debe tener 24 caracteres o menos.', 'error');
+        if (nick === jugador.nick) return;
+        await DB.actualizarJugador(id, { nick });
+        toast('Nick actualizado.');
+        await renderEquipos();
+    } catch (err) { toast(`No se pudo actualizar el nick: ${err.message}`, 'error'); }
+}
 async function toggleJugador(id, activo) {
     try { await DB.actualizarJugador(id, { activo }); } catch (err) { toast(err.message, 'error'); }
     renderEquipos();
@@ -960,6 +976,8 @@ async function toggleJugador(id, activo) {
 // Registro de partida
 // ============================================================
 let capturaActual = null;
+let partidaEnEdicionFechaHora = null;
+let promptVisionEquipoActual = '';
 
 const CAMPOS_STATS = [
     ['k', 'K'], ['d', 'D'], ['a', 'A'], ['dmg', 'DMG'], ['danoReal', 'Daño real'],
@@ -1137,12 +1155,15 @@ async function renderPartidasRecientes() {
     const teams = await Auth.equiposVisibles();
     const partidas = ordenarCronologico(await DB.partidas(teams.map(t => t.id))).reverse().slice(0, 25);
     const puedeBorrar = Auth.puede('partida.eliminar');
+    const puedeEditarPorEquipo = {};
+    for (const team of teams) puedeEditarPorEquipo[team.id] = await Auth.puedeEditarEquipo(team.id);
+    const hayAcciones = puedeBorrar;
     $('#lista-partidas').innerHTML = partidas.length ? `
         <div class="tabla-scroll"><table class="tabla-datos">
-            <thead><tr><th>Fecha</th><th>Roster</th><th>Mapa</th><th>Caída</th><th>Evento</th><th>Pos.</th><th>Bajas</th><th>Pts</th><th>Captura</th>${puedeBorrar ? '<th></th>' : ''}</tr></thead>
+            <thead><tr><th>Fecha</th><th>Roster</th><th>Mapa</th><th>Caída</th><th>Evento</th><th>Pos.</th><th>Bajas</th><th>Pts</th><th>Captura</th>${hayAcciones ? '<th>Acciones</th>' : ''}</tr></thead>
             <tbody>${partidas.map(m => `
                 <tr>
-                    <td>${esc(m.fecha)} ${esc(m.hora)}</td>
+                    <td class="partida-fecha-celda">${partidaEnEdicionFechaHora === m.id ? `<div class="partida-fecha-editor"><div class="partida-fecha-campos"><input type="date" data-partida-fecha value="${esc(m.fecha)}" aria-label="Fecha de la partida"><input type="time" data-partida-hora value="${esc(m.hora)}" aria-label="Hora de la partida"></div><div><button type="button" class="btn-link" onclick="guardarFechaHoraPartida('${m.id}')">Guardar</button> <button type="button" class="btn-link" onclick="cancelarEditarFechaHoraPartida()">Cancelar</button></div></div>` : `<span>${esc(m.fecha)} ${esc(m.hora)}</span>${puedeEditarPorEquipo[m.teamId] ? ` <button type="button" class="btn-link" onclick="editarFechaHoraPartida('${m.id}')" title="Editar fecha y hora" aria-label="Editar fecha y hora"><i class="fa-solid fa-pen-to-square icono-edicion"></i></button>` : ''}`}</td>
                     <td>${esc((teams.find(t => t.id === m.teamId) || {}).nombre)}</td>
                     <td>${esc(m.mapa)}</td>
                     <td>${esc(m.caida || '—')}</td>
@@ -1151,9 +1172,54 @@ async function renderPartidasRecientes() {
                     <td>${bajasPartida(m)}</td>
                     <td><strong>${puntosPartida(m)}</strong></td>
                     <td>${m.tieneCaptura ? `<button class="btn-link" onclick="verCaptura('${m.id}')">Ver</button>` : '—'}</td>
-                    ${puedeBorrar ? `<td><button class="btn-link" onclick="borrarPartida('${m.id}')">Eliminar</button></td>` : ''}
+                    ${hayAcciones ? `<td><button class="btn-link" onclick="borrarPartida('${m.id}')">Eliminar</button></td>` : ''}
                 </tr>`).join('')}</tbody>
         </table></div>` : '<p class="vacio">Aún no hay partidas registradas.</p>';
+}
+
+async function editarFechaHoraPartida(id) {
+    try {
+        const teams = await Auth.equiposVisibles();
+        const partida = (await DB.partidas(teams.map(t => t.id))).find(m => m.id === id);
+        if (!partida) return toast('No se encontró la partida.', 'error');
+        if (!(await Auth.puedeEditarEquipo(partida.teamId))) return toast('No tienes permiso para editar esta partida.', 'error');
+        partidaEnEdicionFechaHora = id;
+        await renderPartidasRecientes();
+        document.querySelector('#lista-partidas [data-partida-fecha]')?.focus();
+    } catch (err) { toast(`No se pudo abrir la edición: ${err.message}`, 'error'); }
+}
+
+function cancelarEditarFechaHoraPartida() {
+    partidaEnEdicionFechaHora = null;
+    renderPartidasRecientes();
+}
+
+async function guardarFechaHoraPartida(id) {
+    try {
+        if (partidaEnEdicionFechaHora !== id) return;
+        const fechaEl = document.querySelector('#lista-partidas [data-partida-fecha]');
+        const horaEl = document.querySelector('#lista-partidas [data-partida-hora]');
+        const nuevaFecha = fechaEl?.value || '';
+        const nuevaHora = horaEl?.value || '';
+        const [year, month, day] = nuevaFecha.split('-').map(Number);
+        const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(nuevaFecha) && (() => {
+            const d = new Date(year, month - 1, day);
+            return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
+        })();
+        if (!fechaValida) return toast('Selecciona una fecha válida.', 'error');
+        if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(nuevaHora)) return toast('Selecciona una hora válida.', 'error');
+        const teams = await Auth.equiposVisibles();
+        const partida = (await DB.partidas(teams.map(t => t.id))).find(m => m.id === id);
+        if (!partida || !(await Auth.puedeEditarEquipo(partida.teamId))) return toast('No tienes permiso para editar esta partida.', 'error');
+        if (nuevaFecha === partida.fecha && nuevaHora === partida.hora) {
+            partidaEnEdicionFechaHora = null;
+            return renderPartidasRecientes();
+        }
+        await DB.actualizarFechaHoraPartida(id, nuevaFecha, nuevaHora);
+        partidaEnEdicionFechaHora = null;
+        toast('Fecha y hora actualizadas.');
+        await renderPartidasRecientes();
+    } catch (err) { toast(`No se pudo actualizar la partida: ${err.message}`, 'error'); }
 }
 
 async function verCaptura(id) {
@@ -1228,6 +1294,11 @@ async function generarInforme() {
     const tend = tendencia(partidas);
     const notas = diagnostico(partidas, plantilla, porMapa);
     const filtroTxt = [f.mapa.value, f.evento.value && nombreEvento(f.evento.value)].filter(Boolean).join(' · ') || 'Todas las partidas';
+    promptVisionEquipoActual = partidas.length ? crearPromptVisionEquipo({
+        titulo, desde: filtros.desde, hasta: filtros.hasta, mapa: f.mapa.value, evento: f.evento.value,
+        resumen: r, anterior: rPrev, periodoAnterior: ant, porMapa, porEvento, porCaida, porPos, tendencia: tend,
+        jugadores: plantilla, notas, equipos: teams, partidas
+    }) : '';
 
     if (!partidas.length) {
         out.innerHTML = cabeceraInforme(titulo, logo, 'Equipo', f) + '<p class="vacio">No hay partidas con estos filtros.</p>';
@@ -1237,6 +1308,7 @@ async function generarInforme() {
     out.innerHTML = `
     <div class="pagina-informe" id="inf-equipo">
         ${cabeceraInforme(titulo, logo, 'Informe del equipo', f)}
+        <div class="vision-ia-acciones no-print"><button type="button" class="btn-sec" onclick="copiarPromptVisionEquipo()"><i class="fa-solid fa-wand-magic-sparkles"></i> Crear prompt para IA</button><small>Copia el contexto y las estadísticas de este informe.</small></div>
         <h2 class="inf-titulo">${esc(titulo)}</h2>
         <p class="inf-sub">${esc(filtroTxt)} · comparado con los ${ant ? ant.dias : 0} día(s) anteriores (${previas.length} partida(s))</p>
 
@@ -1321,6 +1393,54 @@ async function generarInforme() {
         ${seccion('Historial', tablaHistorial(partidas, jugadores, teams, tipo === 'org'))}
         <p class="pie-informe">${esc(titulo)} · generado por Pumas Dev Lab · ${new Date().toLocaleDateString('es')}</p>
     </div>`;
+}
+
+function crearPromptVisionEquipo(datos) {
+    const {
+        titulo, desde, hasta, mapa, evento, resumen, anterior, periodoAnterior,
+        porMapa, porEvento, porCaida, porPos, tendencia: trend, jugadores, notas, equipos, partidas
+    } = datos;
+    const paquete = {
+        equipo: titulo,
+        filtros: { desde, hasta, mapa: mapa || 'Todos', evento: evento ? nombreEvento(evento) : 'Todos' },
+        muestra: { partidas: resumen.partidas, partidasPeriodoAnterior: anterior.partidas, diasPeriodoAnterior: periodoAnterior?.dias || 0 },
+        metricasEquipo: resumen,
+        metricasPeriodoAnterior: anterior,
+        porMapa,
+        porEvento: porEvento.map(x => ({ ...x, evento: nombreEvento(x.clave), clave: undefined })),
+        porCaida: porCaida.slice(0, 12),
+        porPosicion: porPos,
+        tendencia: { lectura: trend.lectura, puntosPorPartida: Number(trend.pendiente.toFixed(2)), ajusteR2: Number(trend.r2.toFixed(2)) },
+        jugadores: jugadores.map(p => ({
+            roster: (equipos.find(t => t.id === p.jugador.teamId) || {}).nombre || null,
+            nick: p.jugador.nick, rol: nombreRolJugador(p.jugador.rol), partidas: p.partidas,
+            bajas: p.bajas, muertes: p.muertes, asistencias: p.asistencias,
+            bajasPorPartida: Number(p.bajasPorPartida.toFixed(2)), kda: Number(p.kda.toFixed(2)),
+            danoMedio: Math.round(p.dmgMedio), danoRealMedio: Math.round(p.danoRealMedio),
+            noqueosPorPartida: Number(p.noqueosPorPartida.toFixed(2)), curacionMedia: Math.round(p.curacionMedia),
+            levantarPorPartida: Number(p.levantarPorPartida.toFixed(2)), resurreccionPorPartida: Number(p.resurreccionPorPartida.toFixed(2)),
+            headshotsPorcentaje: Number(p.hsMedio.toFixed(1)), participacionBajas: Number((p.participacion * 100).toFixed(1)),
+            danoPorBaja: p.danoPorBaja === null ? null : Math.round(p.danoPorBaja), indiceRol: p.indiceRol,
+            primerDerribo: p.primerDerribo, primeraCaida: p.primeraCaida
+        })),
+        diagnosticoAutomatico: notas.map(n => ({ nivel: n.nivel, titulo: n.titulo, evidencia: n.texto })),
+        resultadosRecientes: ordenarCronologico(partidas).slice(-12).map(m => ({
+            fecha: m.fecha, hora: m.hora, roster: (equipos.find(t => t.id === m.teamId) || {}).nombre || null,
+            mapa: m.mapa, evento: nombreEvento(m.evento), posicion: m.posicion, totalEquipos: m.totalEquipos,
+            bajas: bajasPartida(m), puntos: puntosPartida(m)
+        }))
+    };
+    return `Analiza el rendimiento competitivo de este equipo usando solo los datos incluidos. Separa claramente hechos observables de hipótesis; no inventes datos ni atribuyas causalidad. Considera el tamaño de la muestra y señala cuándo no alcanza para concluir. Evalúa tendencia, consistencia, resultados por mapa y evento, equilibrio entre bajas y posición, aportes y necesidades por jugador/rol, y discrepancias con el diagnóstico automático. Termina con tres prioridades de entrenamiento concretas, cada una con su evidencia y una métrica para revisar la mejora.\n\nDATOS DEL INFORME:\n${JSON.stringify(paquete, null, 2)}`;
+}
+
+async function copiarPromptVisionEquipo() {
+    if (!promptVisionEquipoActual) return toast('Genera primero un informe con partidas en el período seleccionado.', 'error');
+    try {
+        await navigator.clipboard.writeText(promptVisionEquipoActual);
+        toast('Prompt de Visión del equipo copiado. Pégalo en tu IA.');
+    } catch {
+        prompt('Copia el prompt para tu IA:', promptVisionEquipoActual);
+    }
 }
 
 // Últimas 10 partidas como fichas: Booyah, Top 3 o posición

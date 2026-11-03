@@ -273,6 +273,15 @@ create policy matches_ver on matches for select using (puede_ver_team(team_id));
 create policy matches_crear on matches for insert with check (puede_editar_team(team_id, true) and creado_por = auth.uid());
 create policy matches_borrar on matches for delete using (puede_editar_team(team_id));
 
+-- Actualiza exclusivamente fecha y hora de una partida, validando permisos por roster.
+create or replace function actualizar_fecha_hora_partida(p_match uuid, p_fecha date, p_hora time) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+    update matches set fecha = p_fecha, hora = p_hora
+    where id = p_match and puede_editar_team(team_id);
+    if not found then raise exception 'No tienes permiso para editar esa partida o no existe.'; end if;
+end $$;
+
 create policy mp_ver on match_players for select using (
     exists (select 1 from matches m where m.id = match_id and puede_ver_team(m.team_id))
 );
