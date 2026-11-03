@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css?v=36">
+    <link rel="stylesheet" href="css/style.css?v=39">
     <link rel="stylesheet" href="css/moderno.css?v=35">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -344,6 +344,13 @@
                 <div id="tb-opc-icono" hidden>
                     <h3 style="margin-top:10px">Íconos</h3>
                     <div id="tb-iconos" class="tb-iconos"></div>
+                    <section class="tb-monedas-calc" aria-label="Calculadora de monedas">
+                        <h4><i class="fa-solid fa-coins"></i> Calculadora de monedas</h4>
+                        <label>Monedas por ubicación marcada<input id="tb-monedas-cantidad" type="number" min="0" step="1" value="1" oninput="actualizarCalculadoraMonedas()"></label>
+                        <p><span id="tb-monedas-ubicaciones">0 ubicaciones</span><strong id="tb-monedas-total">Total: 0 monedas</strong></p>
+                        <small>El total usa las ubicaciones guardadas en la biblioteca del mapa.</small>
+                        <button type="button" class="btn-sec tb-ancho" style="margin-top:8px" onclick="abrirCalibradorMonedas()"><i class="fa-solid fa-crosshairs"></i> Calibrar biblioteca por mapa</button>
+                    </section>
                 </div>
                 <div id="tb-opc-logo" hidden>
                     <h3 style="margin-top:10px">Logos</h3>
@@ -642,6 +649,23 @@
                 <button type="button" class="btn-sec" onclick="modulosTodos(false)">Desmarcar todo</button>
             </div>
         </form>
+
+        <section class="tool-container" id="ajustes-iconoteca">
+            <h3 class="card-titulo"><i class="fa-solid fa-icons"></i> Biblioteca de iconos del mapeador</h3>
+            <p class="ayuda">Elige cuáles iconos aparecen al usar la herramienta «Ícono» en Estrategia. Puedes agregar un carácter o una imagen PNG/JPG/WebP ubicada en <code>imagenes/iconos/</code>; escribe solo el nombre del archivo. Los iconos añadidos se guardan en este navegador y sus rutas quedan en los planos.</p>
+            <form class="form-grid form-grid-iconoteca" onsubmit="agregarIconoBiblioteca(event)">
+                <div class="form-group"><label for="nuevo-icono-nombre">NOMBRE</label><input id="nuevo-icono-nombre" maxlength="30" required placeholder="Punto de interés"></div>
+                <div class="form-group"><label for="nuevo-icono-glifo">CARÁCTER O CÓDIGO UNICODE</label>
+                    <div class="tb-iconoteca-entrada">
+                        <input id="nuevo-icono-glifo" maxlength="24" placeholder="★ o 2605" oninput="vistaPreviaIconoBiblioteca()">
+                        <span id="nuevo-icono-vista" class="tb-iconoteca-vista" aria-hidden="true">—</span>
+                    </div>
+                </div>
+                <div class="form-group"><label for="nuevo-icono-imagen">IMAGEN DEL PROYECTO (OPCIONAL)</label><input id="nuevo-icono-imagen" maxlength="100" placeholder="ejemplo.png"><small class="ayuda">Archivo ya agregado en imagenes/iconos/</small></div>
+                <div class="form-group" style="align-self:end"><button class="btn-generar" type="submit">AGREGAR ICONO</button></div>
+            </form>
+            <div class="tabla-scroll"><table class="tabla-datos tabla-modulos"><thead><tr><th>Icono</th><th>Visible en el mapeador</th><th></th></tr></thead><tbody id="tabla-biblioteca-iconos"></tbody></table></div>
+        </section>
     </div>
 </section>
 
@@ -962,8 +986,9 @@
 <script src="js/db.js?v=15"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
-<script src="js/tablero.js?v=55"></script>
-<script src="js/estrategia.js?v=39"></script>
+<script src="js/tablero.js?v=58"></script>
+<script src="js/estrategia.js?v=43"></script>
+<script src="js/calibrador-monedas.js?v=1"></script>
 <script src="js/mapeador-caidas-data.js?v=1"></script>
 <script src="js/mapeador-caidas-analisis.js?v=4"></script>
 <script src="js/mapeador-caidas.js?v=25"></script>
@@ -977,7 +1002,7 @@
 <script src="js/resultados.js?v=14"></script>
 <script src="js/administrativo.js?v=1"></script>
 <script src="js/caidas-privados.js?v=3"></script>
-<script src="js/app.js?v=23"></script>
+<script src="js/app.js?v=25"></script>
 <script src="js/animaciones.js?v=14"></script>
 </body>
 </html>

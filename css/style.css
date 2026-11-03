@@ -877,7 +877,35 @@ body.sb-colapsado .sb-nav > button, body.sb-colapsado .sb-boton { justify-conten
 .tb-rango input { width: 100%; accent-color: var(--primary); }
 .tb-iconos { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
 .tb-icono, .tb-logo { height: 38px; background: var(--dark); border: 1px solid rgba(0, 240, 255, 0.2); color: var(--light); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.tb-icono .fa-solid { font-size: 1rem; }
+.tb-icono .fa-solid, .tb-icono .tb-glifo { font-size: 1rem; }
+.tb-icono-img { width: 25px; height: 25px; object-fit: contain; }
+.tb-glifo { display: inline-flex; align-items: center; justify-content: center; min-width: 1.25em; font-size: 1.15rem; line-height: 1; }
+.tb-iconoteca-entrada { display: flex; gap: 8px; align-items: center; }
+.tb-iconoteca-entrada input { flex: 1; min-width: 0; }
+.tb-iconoteca-vista { width: 42px; height: 42px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--dark); border: 1px solid rgba(0, 240, 255, 0.35); color: var(--light); font-size: 1.35rem; }
+.tb-iconoteca-img { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; margin-right: 7px; }
+.tb-monedas-calc { margin-top: 12px; padding: 10px; border: 1px solid rgba(0, 240, 255, 0.25); background: rgba(0, 240, 255, 0.04); }
+.tb-monedas-calc h4 { margin: 0 0 8px; color: var(--primary); }
+.tb-monedas-calc label { display: grid; gap: 5px; font-size: .82rem; }
+.tb-monedas-calc input { width: 100%; }
+.tb-monedas-calc p { display: flex; justify-content: space-between; gap: 8px; margin: 8px 0 4px; }
+.tb-monedas-calc small { color: var(--muted); }
+.cal-monedas-backdrop { position: fixed; inset: 0; z-index: 10050; display: grid; place-items: center; padding: 18px; background: rgba(0,0,0,.82); }
+.cal-monedas-backdrop[hidden] { display: none; }
+.cal-monedas-dialog { width: min(1100px, 96vw); max-height: 94vh; overflow: auto; padding: 18px; background: #080d13; border: 1px solid rgba(0,240,255,.45); box-shadow: 0 20px 70px #000; color: var(--light); }
+.cal-monedas-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.cal-monedas-dialog h2 { margin: 0 0 5px; color: var(--primary); }
+.cal-monedas-dialog header p { margin: 0; }
+.cal-monedas-mapa { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.cal-monedas-mapa select { min-width: 180px; }
+.cal-monedas-canvas-wrap { max-height: 64vh; overflow: auto; background: #030609; border: 1px solid rgba(0,240,255,.2); text-align: center; }
+#cal-monedas-canvas { display: block; width: 100%; height: auto; cursor: crosshair; }
+.cal-monedas-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.cal-monedas-estado { min-height: 1.4em; margin: 9px 0 0; color: var(--primary); }
+body.cal-monedas-abierto { overflow: hidden; }
+@media (min-width: 993px) {
+    .form-grid-iconoteca { grid-template-columns: 1.2fr 1.4fr auto; }
+}
 .tb-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .tb-icono.activo, .tb-logo.activo { border-color: var(--primary); background: rgba(0, 240, 255, 0.15); color: var(--primary); }
 .tb-rival { display: flex; gap: 6px; }

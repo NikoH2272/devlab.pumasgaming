@@ -27,6 +27,7 @@ async function abrirEstrategia(tipo, registro = null) {
     if (!tablero) {
         tablero = new Tablero($('#tb-canvas'), { alCambiar: alCambiarTablero, alSeleccionarEquipo: pintarEquiposTablero, alSeleccionar: () => { sincronizarPausa(); sincronizarJugador(); } });
         pintarHerramientas();
+        if (typeof cargarBibliotecaIconos === 'function') cargarBibliotecaIconos();
         pintarIconos();
         $('#tb-vehiculo').innerHTML = TB_VEHICULOS.map(([id, n, kmh]) => `<option value="${id}">${n}${kmh ? ` · ${kmh} km/h` : ''}</option>`).join('');
         $('#tb-mapa').innerHTML = CATALOGO.mapas.map(m => `<option value="${m}">${m}</option>`).join('');
@@ -62,6 +63,7 @@ async function abrirEstrategia(tipo, registro = null) {
     setTimeout(pintarFormatoInforme, 150);
     pintarContenido();
     pintarLinea();
+    actualizarCalculadoraMonedas();
     return true;
 }
 
@@ -102,6 +104,7 @@ async function cambiarMapaTablero(mapa) {
     tablero.ponerFondo(await fondoDelMapa(mapa));
     marcarCambio();
     pintarAnalisisTablero();
+    actualizarCalculadoraMonedas();
 }
 
 function alCambiarTablero(evento) {
@@ -114,6 +117,7 @@ function alCambiarTablero(evento) {
     marcarCambio();
     pintarEquiposTablero();
     pintarAnalisisTablero();
+    actualizarCalculadoraMonedas();
 }
 
 // El control de apertura muestra la del cono seleccionado
@@ -243,10 +247,29 @@ function elegirHerramienta(id) {
 }
 
 function pintarIconos() {
-    $('#tb-iconos').innerHTML = Object.entries(TB_ICONOS).map(([id, ic]) => `
-        <button type="button" class="tb-icono ${id === tablero.estilo.icono ? 'activo' : ''}" data-ic="${id}" title="${ic.n}" onclick="elegirIcono('${id}')">
-            <span class="fa-solid">${ic.u}</span>
+    const host = $('#tb-iconos');
+    if (!host || !tablero) return;
+    const ocultos = new Set((typeof configBibliotecaIconos === 'function' ? configBibliotecaIconos().ocultos : []) || []);
+    const visibles = Object.entries(TB_ICONOS).filter(([id]) => !ocultos.has(id));
+    if (!visibles.some(([id]) => id === tablero.estilo.icono) && visibles[0]) tablero.estilo.icono = visibles[0][0];
+    if (!visibles.length) {
+        host.innerHTML = '<p class="ayuda" style="grid-column:1/-1;margin:0">No hay iconos visibles. En Ajustes, Biblioteca de iconos, marca cuáles quieres en el selector.</p>';
+        return;
+    }
+    host.innerHTML = visibles.map(([id, ic]) => `
+        <button type="button" class="tb-icono ${id === tablero.estilo.icono ? 'activo' : ''}" data-ic="${esc(id)}" title="${esc(ic.n)}" onclick="elegirIcono('${esc(id)}')">
+            ${ic.src ? `<img src="${esc(ic.src)}" alt="" class="tb-icono-img">` : `<span class="${ic.fa === false ? 'tb-glifo' : 'fa-solid'}">${esc(ic.u)}</span>`}
         </button>`).join('');
+}
+
+function actualizarCalculadoraMonedas() {
+    const cantidad = Math.max(0, Math.floor(Number($('#tb-monedas-cantidad')?.value) || 0));
+    const ubicaciones = typeof contarUbicacionesMonedas === 'function'
+        ? contarUbicacionesMonedas(tablero?.mapaActual || $('#tb-mapa')?.value)
+        : (tablero?.doc?.objetos || []).filter(o => o.t === 'icono' && o.ic === 'moneda').length;
+    const etiqueta = $('#tb-monedas-ubicaciones'), total = $('#tb-monedas-total');
+    if (etiqueta) etiqueta.textContent = `${ubicaciones} ${ubicaciones === 1 ? 'ubicación' : 'ubicaciones'}`;
+    if (total) total.textContent = `Total: ${ubicaciones * cantidad} monedas`;
 }
 
 function ponerApertura(grados) {

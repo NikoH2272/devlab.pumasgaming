@@ -105,6 +105,7 @@ function entrar() {
     aplicarModulos();
     actualizarTitulosMenu();
     aplicarBotonesAyuda();
+    cargarBibliotecaIconos();
     // El manager entra directo al módulo Administrativo
     irA(u.rol === 'manager' && moduloVisible('administrativo') ? 'vista-admin' : 'inicio');
     cargarModulos();
@@ -437,12 +438,103 @@ async function renderAjustes() {
     f.iaLimiteGlobal.value = a.iaLimiteGlobal;
     modulosGuardados = a.modulos || {};
     pintarModulosAjustes(a.modulos === null);
+    cargarBibliotecaIconos();
     try {
         const usos = await DB.iaUsosHoy();
         $('#ia-uso-total').textContent = `Hoy se han hecho ${Stats.sum(Object.values(usos))} lecturas en toda la plataforma.`;
     } catch (err) {
         $('#ia-uso-total').textContent = 'Ejecuta la migración 004_limites_ia.sql para activar los límites.';
     }
+}
+
+// Biblioteca del selector de iconos del mapeador. Se guarda en este navegador.
+const CLAVE_BIBLIOTECA_ICONOS = 'pumasDevLab.bibliotecaIconos.v1';
+function configBibliotecaIconos() {
+    try {
+        const cfg = JSON.parse(localStorage.getItem(CLAVE_BIBLIOTECA_ICONOS) || '{"ocultos":[],"propios":[]}');
+        return { ocultos: Array.isArray(cfg.ocultos) ? cfg.ocultos : [], propios: Array.isArray(cfg.propios) ? cfg.propios : [] };
+    } catch (_) { return { ocultos: [], propios: [] }; }
+}
+function aplicarBibliotecaIconos(cfg) {
+    Object.keys(TB_ICONOS).forEach(id => { if (id.startsWith('custom_')) delete TB_ICONOS[id]; });
+    (cfg.propios || []).forEach(ic => {
+        if (ic.id && ic.n && (ic.u || ic.src)) TB_ICONOS[ic.id] = { id: ic.id, n: ic.n, u: ic.u || '', src: ic.src || null, fa: false };
+    });
+}
+function cargarBibliotecaIconos() {
+    aplicarBibliotecaIconos(configBibliotecaIconos());
+    pintarBibliotecaIconos();
+    if (typeof tablero !== 'undefined' && tablero) pintarIconos();
+}
+function guardarBibliotecaIconos(cfg) {
+    localStorage.setItem(CLAVE_BIBLIOTECA_ICONOS, JSON.stringify(cfg));
+    aplicarBibliotecaIconos(cfg);
+    pintarBibliotecaIconos();
+    if (typeof tablero !== 'undefined' && tablero) pintarIconos();
+}
+function htmlGlifoIcono(ic) {
+    if (ic.src) return `<img class="tb-iconoteca-img" src="${esc(ic.src)}" alt="">`;
+    return `<span class="${ic.fa === false ? 'tb-glifo' : 'fa-solid tb-glifo'}" aria-hidden="true">${esc(ic.u)}</span>`;
+}
+function pintarBibliotecaIconos() {
+    const host = $('#tabla-biblioteca-iconos');
+    if (!host) return;
+    const cfg = configBibliotecaIconos(), ocultos = new Set(cfg.ocultos || []), propios = new Set((cfg.propios || []).map(ic => ic.id));
+    host.innerHTML = Object.entries(TB_ICONOS).map(([id, ic]) => `<tr>
+        <td>${htmlGlifoIcono(ic)} <strong>${esc(ic.n)}</strong></td>
+        <td><input type="checkbox" ${ocultos.has(id) ? '' : 'checked'} aria-label="Mostrar ${esc(ic.n)}" onchange="alternarIconoBiblioteca('${esc(id)}',this.checked)"></td>
+        <td>${propios.has(id) ? `<button type="button" class="btn-sec" onclick="eliminarIconoBiblioteca('${esc(id)}')">Eliminar</button>` : '<small>Incluido</small>'}</td>
+    </tr>`).join('');
+}
+function alternarIconoBiblioteca(id, visible) {
+    const cfg = configBibliotecaIconos(), ocultos = new Set(cfg.ocultos || []);
+    if (visible) ocultos.delete(id); else ocultos.add(id);
+    cfg.ocultos = [...ocultos]; guardarBibliotecaIconos(cfg);
+}
+function glifoDesdeEntrada(entrada) {
+    const t = String(entrada || '').trim();
+    if (!t) return null;
+    const hex = t.match(/^(?:U\+|0x|\\[uU]|&#x)([0-9a-f]{2,6});?$/i) || t.match(/^([0-9a-f]{4,6})$/i);
+    if (hex) {
+        const cp = parseInt(hex[1], 16);
+        if (cp < 0x20 || cp > 0x10ffff) return null;
+        return String.fromCodePoint(cp);
+    }
+    const g = (typeof Intl !== 'undefined' && Intl.Segmenter)
+        ? [...new Intl.Segmenter().segment(t)][0]?.segment
+        : String.fromCodePoint(t.codePointAt(0));
+    if (!g || g.codePointAt(0) < 0x20) return null;
+    return g;
+}
+function vistaPreviaIconoBiblioteca() {
+    const caja = $('#nuevo-icono-vista');
+    if (!caja) return;
+    const g = glifoDesdeEntrada($('#nuevo-icono-glifo').value);
+    caja.textContent = g || '—';
+}
+function agregarIconoBiblioteca(e) {
+    e.preventDefault();
+    const nombre = $('#nuevo-icono-nombre').value.trim();
+    const glifoEntrada = $('#nuevo-icono-glifo').value.trim();
+    const glifo = glifoDesdeEntrada(glifoEntrada);
+    const archivo = $('#nuevo-icono-imagen').value.trim();
+    const esRutaImagen = /^(?!\.)(?!.*\.\.)[\w .()_-]+\.(?:png|jpe?g|webp|gif|svg)$/i.test(archivo);
+    if (!nombre) return toast('Escribe un nombre para el icono.', 'error');
+    if (archivo && !esRutaImagen) return toast('Escribe solo el nombre de un archivo de imagen válido, por ejemplo marca.png.', 'error');
+    if (!archivo && !glifo) return toast('Escribe un carácter Unicode o el nombre de una imagen.', 'error');
+    const cfg = configBibliotecaIconos(), id = `custom_${Date.now().toString(36)}`;
+    cfg.propios = [...(cfg.propios || []), { id, n: nombre, u: glifo || '', ...(archivo ? { src: `imagenes/iconos/${archivo}` } : {}), fa: false }];
+    cfg.ocultos = (cfg.ocultos || []).filter(x => x !== id);
+    guardarBibliotecaIconos(cfg);
+    e.target.reset();
+    vistaPreviaIconoBiblioteca();
+    toast('Icono agregado a la biblioteca.');
+}
+function eliminarIconoBiblioteca(id) {
+    const cfg = configBibliotecaIconos();
+    cfg.propios = (cfg.propios || []).filter(ic => ic.id !== id);
+    cfg.ocultos = (cfg.ocultos || []).filter(x => x !== id);
+    guardarBibliotecaIconos(cfg);
 }
 
 function pintarModulosAjustes(faltaMigracion) {

@@ -119,7 +119,7 @@
         host.innerHTML = `
             <header class="mca-head">
                 <div><span class="tb-kicker">// Mapeador de caídas</span><h2>Análisis de spots</h2><p>Asigna una caída por mapa y agrega los logos de los equipos. Los nombres se muestran ordenados en una esquina o junto al spot elegido; puedes arrastrarlos para moverlos.</p></div>
-                <div class="mca-head-actions"><label>Importar roster<select data-mca="roster"><option value="">Cargando rosters…</option></select></label><button type="button" class="btn-sec" data-mca="load-roster"><i class="fa-solid fa-download"></i> Cargar roster</button><button type="button" class="btn-sec" onclick="mapeadorAbrirPlano()" title="Abrir el plano con herramientas UAV y tiempos"><i class="fa-solid fa-crosshairs"></i> UAV y tiempos</button><label>Equipos<select data-mca="count"><option value="12" ${state.n === 12 ? 'selected' : ''}>12 equipos</option><option value="15" ${state.n === 15 ? 'selected' : ''}>15 equipos</option></select></label><label>Colocación<select data-mca="position-mode"><option value="esquina" ${state.modoPosicion === 'esquina' ? 'selected' : ''}>Esquina ordenada · mover manualmente</option><option value="caida" ${state.modoPosicion === 'caida' ? 'selected' : ''}>Automático al spot · también mover</option></select></label><button type="button" class="btn-sec" data-mca="save-shelf"><i class="fa-solid fa-box-archive"></i> Guardar en repisa</button><button type="button" class="btn-sec" data-mca="clear-spots">Vaciar caídas</button></div>
+                <div class="mca-head-actions"><label>Importar roster<select data-mca="roster"><option value="">Cargando rosters…</option></select></label><button type="button" class="btn-sec" data-mca="load-roster"><i class="fa-solid fa-download"></i> Cargar roster</button><button type="button" class="btn-sec" data-mca="load-org-rosters" title="Carga las caídas de los rosters visibles de la organización activa"><i class="fa-solid fa-people-group"></i> Cargar rosters de la organización</button><button type="button" class="btn-sec" onclick="mapeadorAbrirPlano()" title="Abrir el plano con herramientas UAV y tiempos"><i class="fa-solid fa-crosshairs"></i> UAV y tiempos</button><label>Equipos<select data-mca="count"><option value="12" ${state.n === 12 ? 'selected' : ''}>12 equipos</option><option value="15" ${state.n === 15 ? 'selected' : ''}>15 equipos</option></select></label><label>Colocación<select data-mca="position-mode"><option value="esquina" ${state.modoPosicion === 'esquina' ? 'selected' : ''}>Esquina ordenada · mover manualmente</option><option value="caida" ${state.modoPosicion === 'caida' ? 'selected' : ''}>Automático al spot · también mover</option></select></label><button type="button" class="btn-sec" data-mca="save-shelf"><i class="fa-solid fa-box-archive"></i> Guardar en repisa</button><button type="button" class="btn-sec" data-mca="clear-spots">Vaciar caídas</button></div>
             </header>
             <div class="mca-input-tools"><label for="mca-team-list">Cargar nombres de equipos, uno por línea</label><div><textarea id="mca-team-list" rows="3" placeholder="PUMAS E7&#10;Equipo 2&#10;..."></textarea><button type="button" class="btn-sec" data-mca="paste-teams">Aplicar lista</button></div><small>La tabla conserva las caídas guardadas al cambiar entre 12 y 15 equipos.</small></div>
             <div class="mca-table-wrap"><table class="mca-table"><thead><tr><th>#</th><th>Equipo / logo</th><th>Mi equipo</th>${MAPAS.map(m => `<th>${m.nombre}</th>`).join('')}</tr></thead><tbody>${state.filas.map((row, i) => `<tr><td>${i + 1}</td><td class="mca-team-cell"><label class="mca-logo-input" title="Cargar logo de ${esc(row.equipo || `equipo ${i + 1}`)}"><img data-logo-preview="${i}" src="${esc(row.logo)}" alt="" ${row.logo ? '' : 'hidden'}><i class="fa-solid fa-camera" ${row.logo ? 'hidden' : ''}></i><input type="file" data-logo="${i}" accept="image/png,image/jpeg,image/webp" hidden></label><input data-team="${i}" value="${esc(row.equipo)}" placeholder="Equipo ${i + 1}" aria-label="Equipo ${i + 1}"><button type="button" class="mca-remove-logo" data-remove-logo="${i}" ${row.logo ? '' : 'hidden'} title="Quitar logo">×</button></td><td class="mca-mi-equipo"><label><input type="checkbox" data-own-team="${i}" ${state.miEquipo === i ? 'checked' : ''}><span>Mi equipo</span></label></td>${MAPAS.map((m, j) => `<td class="mca-drop-cell"><select data-drop="${i}:${j}" aria-label="Caída de ${esc(row.equipo || `equipo ${i + 1}`)} en ${m.nombre}"><option value="">Sin caída</option>${(CATALOG[m.id] || []).map(spot => `<option value="${esc(spot)}" ${norm(row.caidas[j]) === norm(spot) ? 'selected' : ''}>${esc(spot)}</option>`).join('')}</select><small class="mca-conflict-label" data-conflict="${i}:${j}" aria-live="polite"></small></td>`).join('')}</tr>`).join('')}</tbody></table></div>
@@ -152,6 +152,7 @@
             state.filas.forEach(row => { row.caidas = MAPAS.map(() => ''); row.posiciones = {}; }); save(); render();
         });
         host.querySelector('[data-mca="load-roster"]').addEventListener('click', importarRosterSeleccionado);
+        host.querySelector('[data-mca="load-org-rosters"]').addEventListener('click', importarRostersOrganizacion);
         host.querySelectorAll('[data-team]').forEach(input => input.addEventListener('input', () => {
             state.filas[Number(input.dataset.team)].equipo = input.value; save(); updateMaps();
         }));
@@ -225,6 +226,33 @@
         } catch (error) {
             setStatus(`No se pudo importar el roster: ${error.message}`);
             if (button) { button.disabled = false; button.innerHTML = button.dataset.label || 'Cargar roster'; }
+        }
+    }
+
+    async function importarRostersOrganizacion() {
+        const button = document.querySelector('#mapeador-caidas [data-mca="load-org-rosters"]');
+        if (!rosterOptions.length) return setStatus('No hay rosters visibles para cargar.');
+        if (button) { button.disabled = true; button.dataset.label = button.innerHTML; button.textContent = 'Cargando rosters…'; }
+        try {
+            const equipos = rosterOptions.slice(0, 15);
+            const caidas = await DB.caidas(equipos.map(team => team.id));
+            const n = equipos.length > 12 ? 15 : 12;
+            const filas = blank(n);
+            equipos.forEach((team, i) => {
+                const row = filas[i];
+                row.equipo = team.nombre; row.logo = team.logo || ''; row.rosterId = team.id;
+                row.caidas = MAPAS.map(mapa => {
+                    const caida = caidas.find(c => c.teamId === team.id && norm(c.mapa) === norm(mapa.nombre));
+                    return canonicalSpot(mapa.id, caida?.zona || '');
+                });
+            });
+            state = { ...state, n, miEquipo: null, filas };
+            save(); render();
+            const withData = equipos.filter(team => filas.some(row => row.rosterId === team.id && row.caidas.some(Boolean))).length;
+            setStatus(`${equipos.length} roster(s) cargados desde la organización; ${withData} tienen caídas registradas${rosterOptions.length > equipos.length ? `. Se cargaron los primeros ${equipos.length} de ${rosterOptions.length} por el límite de 15 equipos` : ''}.`);
+        } catch (error) {
+            setStatus(`No se pudieron cargar los rosters de la organización: ${error.message}`);
+            if (button) { button.disabled = false; button.innerHTML = button.dataset.label || 'Cargar rosters de la organización'; }
         }
     }
 

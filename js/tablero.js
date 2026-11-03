@@ -23,6 +23,7 @@
 const TB_ANCHO = 1000;
 const TB_FUENTE = "'Orbitron', sans-serif";
 const TB_FA = '"Font Awesome 6 Free"';
+const TB_SIMBOLO = "'Rajdhani', 'Segoe UI Symbol', 'Noto Sans Symbols 2', sans-serif";
 // Marca de agua de las descargas (PNG y video)
 const TB_CREADOR = { usuario: '@coach.nikoh', url: 'https://www.instagram.com/coach.nikoh/' };
 
@@ -58,6 +59,7 @@ const TB_HERRAMIENTAS = {
 
 // Íconos de Font Awesome que se dibujan en el lienzo
 const TB_ICONOS = {
+    moneda:    { n: 'Moneda',      u: '\u{1FA99}', fa: false },
     lanzadera: { n: 'Lanzadera',  u: '' },
     portal:    { n: 'Portal',     u: '' },
     vehiculo:  { n: 'Vehículo',   u: '' },
@@ -162,6 +164,13 @@ class Tablero {
     // ---------- Documento ----------
     cargar(doc, fondoSrc) {
         this.doc = Object.assign(Tablero.docVacio(), JSON.parse(JSON.stringify(doc || {})));
+        (this.doc.objetos || []).forEach(o => {
+            if (o.t !== 'icono') return;
+            const def = TB_ICONOS[o.ic] || TB_ICONOS.objetivo;
+            if (o.ic === 'moneda') { o.u = def.u; o.fa = false; delete o.src; return; }
+            if (!o.u) o.u = def.u;
+            if (o.fa === undefined) o.fa = def.fa !== false;
+        });
         this.historial = [];
         this.seleccion = null;
         this.vista = { z: 1, x: 0, y: 0 };
@@ -1012,10 +1021,18 @@ class Tablero {
             }
             case 'icono': {
                 const p = P(o), r = Math.max(9, (o.s || 14) * k);
+                const def = TB_ICONOS[o.ic] || TB_ICONOS.objetivo;
+                const glifo = o.u || def.u;
+                const fa = o.fa !== undefined ? o.fa : def.fa !== false;
                 c.fillStyle = 'rgba(5, 5, 8, 0.85)';
                 c.beginPath(); c.arc(p.x, p.y, r, 0, 7); c.fill();
                 c.strokeStyle = o.color; c.lineWidth = Math.max(1.5, k * 2); c.stroke();
-                this._icono(c, (TB_ICONOS[o.ic] || TB_ICONOS.objetivo).u, p.x, p.y, r * 1.05, o.color);
+                const iconSrc = o.src || def.src;
+                const iconImg = iconSrc ? this.imagen(iconSrc) : null;
+                if (iconImg && iconImg.complete && iconImg.naturalWidth) {
+                    c.save(); c.beginPath(); c.arc(p.x, p.y, r * 0.82, 0, Math.PI * 2); c.clip();
+                    c.drawImage(iconImg, p.x - r * 0.78, p.y - r * 0.78, r * 1.56, r * 1.56); c.restore();
+                } else this._icono(c, glifo, p.x, p.y, r * 1.05, o.color, 0, fa);
                 break;
             }
             case 'logo': {
@@ -1259,12 +1276,12 @@ class Tablero {
         c.restore();
     }
 
-    _icono(c, glifo, x, y, tam, color, giro = 0) {
+    _icono(c, glifo, x, y, tam, color, giro = 0, fa = true) {
         c.save();
         c.translate(x, y);
         c.rotate(giro);
         c.fillStyle = color;
-        c.font = `900 ${tam}px ${TB_FA}`;
+        c.font = `900 ${tam}px ${fa ? TB_FA : TB_SIMBOLO}`;
         c.textAlign = 'center';
         c.textBaseline = 'middle';
         c.fillText(glifo, 0, 0);
@@ -1621,7 +1638,8 @@ class Tablero {
             return;
         }
         if (h === 'icono') {
-            agregar({ t: 'icono', ic: this.estilo.icono, x: l.x, y: l.y, color, s: 10 + grosor });
+            const def = TB_ICONOS[this.estilo.icono] || TB_ICONOS.objetivo;
+            agregar({ t: 'icono', ic: this.estilo.icono, u: def.u, ...(def.src ? { src: def.src } : {}), fa: def.fa !== false, x: l.x, y: l.y, color, s: 10 + grosor });
             this.cambio();
             return;
         }
