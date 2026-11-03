@@ -218,6 +218,10 @@ small { color:var(--g); }
 .salto { break-before:page; }
 @media print {
   @page { size:A4; margin:10mm; }
+  :root { --c:#000; --t:#000; --s:#000; --g:#000; --f:#fff; --p:#fff; --l:#ccc; color-scheme:light; }
+  body, .hoja { background:#fff; }
+  .hoja, .hoja * { color:#000 !important; text-shadow:none !important; }
+  .nota { background:#fff; }
   .barra-sup { display:none; }
   .hoja { padding:0; max-width:none; }
   tr, .figura, .kpi, .b-fila { break-inside:avoid; }

@@ -326,6 +326,29 @@ input[type="range"] { accent-color: var(--primary); }
 .f-bajo { color: var(--gray); opacity: 0.75; }
 @media print { .f-booyah { box-shadow: none; } }
 
+/* El tema de pantalla no debe oscurecer el informe impreso. */
+@media print {
+    body { background: #fff !important; color: #000 !important; color-scheme: light; }
+    #vista-informe, #vista-informe * {
+        color: #000 !important;
+        -webkit-text-fill-color: #000 !important;
+        text-shadow: none !important;
+    }
+    #vista-informe .pagina-informe,
+    #vista-informe .kpi,
+    #vista-informe .grafica,
+    #vista-informe .nota,
+    #vista-informe .forma-ficha,
+    #vista-informe .pos-chip {
+        background: #fff !important;
+        border-color: #ccc !important;
+        box-shadow: none !important;
+        opacity: 1;
+    }
+    #vista-informe .kpi-valor { background: none !important; }
+    #vista-informe .tabla-informe tr { background: #fff !important; }
+}
+
 /* ---------- Celular ---------- */
 @media (max-width: 600px) {
     .topbar { gap: 10px; padding: 10px 12px; }
