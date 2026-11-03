@@ -367,7 +367,8 @@ const DB = {
             id, team_id: p.teamId, fecha: p.fecha, hora: p.hora, mapa: p.mapa, evento: p.evento,
             posicion: p.posicion, total_equipos: p.totalEquipos,
             primer_derribo: p.primerDerribo, primera_caida: p.primeraCaida,
-            notas: p.notas || null, caida: p.caida || null, captura: p.captura || null, creado_por: p.creadoPor
+            // La captura solo se usa temporalmente para leer el marcador con IA.
+            notas: p.notas || null, caida: p.caida || null, creado_por: p.creadoPor
         }));
         try {
             await q(supabaseClient.from('match_players').insert(p.stats.map(s => ({

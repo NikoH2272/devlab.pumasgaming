@@ -1138,7 +1138,7 @@ async function onGuardarPartida(e) {
             teamId: f.teamId.value, fecha: f.fecha.value, hora: f.hora.value,
             mapa: f.mapa.value, evento: f.evento.value, posicion, totalEquipos: total,
             primerDerribo: f.primerDerribo.value || null, primeraCaida: f.primeraCaida.value || null,
-            notas: f.notas.value.trim(), caida: f.caida.value || null, captura: capturaActual, stats, creadoPor: Auth.usuario.id
+            notas: f.notas.value.trim(), caida: f.caida.value || null, stats, creadoPor: Auth.usuario.id
         });
         toast('Partida guardada.');
         capturaActual = null;

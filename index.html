@@ -781,6 +781,7 @@
                 <div class="form-group">
                     <label for="pt-captura">CAPTURA DEL MARCADOR (OPCIONAL)</label>
                     <input id="pt-captura" name="captura" type="file" accept="image/*" onchange="onCaptura(this)">
+                    <small class="ayuda">La captura solo se usa para leer el marcador con IA. Se guardan las estadísticas, sin almacenar la imagen.</small>
                 </div>
                 <button type="button" id="btn-leer-ia" class="btn-sec" onclick="leerCapturaIA()" disabled>
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Leer con IA
@@ -983,7 +984,7 @@
 </div>
 
 <script src="js/config.js?v=22"></script>
-<script src="js/db.js?v=15"></script>
+<script src="js/db.js?v=16"></script>
 <script src="js/auth.js?v=14"></script>
 <script src="js/analytics.js?v=14"></script>
 <script src="js/tablero.js?v=58"></script>
@@ -1002,7 +1003,7 @@
 <script src="js/resultados.js?v=14"></script>
 <script src="js/administrativo.js?v=1"></script>
 <script src="js/caidas-privados.js?v=3"></script>
-<script src="js/app.js?v=30"></script>
+<script src="js/app.js?v=31"></script>
 <script src="js/animaciones.js?v=14"></script>
 </body>
 </html>
