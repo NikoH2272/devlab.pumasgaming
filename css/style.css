@@ -1019,6 +1019,17 @@ body.cal-monedas-abierto { overflow: hidden; }
 .formh-ficha summary { color:var(--primary); cursor:pointer; }
 .formh-ficha summary small { margin-left:5px; color:var(--gray); }
 .formh-ficha p { margin:6px 0; }
+.formh-libre { margin-bottom:24px; padding:20px; background:var(--dark-card); border:1px solid var(--primary); }
+.formh-libre h3 { color:var(--primary); margin:0 0 10px; }
+.formh-libre label { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.formh-libre-campos { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0; }
+.formh-libre select, .formh-libre textarea { width:100%; box-sizing:border-box; padding:10px; color:var(--light); background:var(--dark); border:1px solid var(--linea); }
+.formh-libre textarea { resize:vertical; }
+.formh-libre-seleccion article { display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--linea); }
+.formh-libre-seleccion article > div:nth-child(2) { flex:1; min-width:0; }
+.formh-libre-seleccion small { display:block; margin-top:4px; color:var(--gray); }
+.formh-libre-acciones { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }
+@media(max-width:700px) { .formh-libre-campos { grid-template-columns:1fr; } }
 .formh-repisa { margin-top:20px; padding:15px; background:var(--dark-card); border:1px solid rgba(0,240,255,.2); }
 .formh-repisa h3 { color:var(--primary); }
 .formh-repisa h3 small { color:var(--gray); font-weight:400; }

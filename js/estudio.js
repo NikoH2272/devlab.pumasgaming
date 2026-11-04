@@ -155,7 +155,7 @@ function formhRetrato(f){return f?`<img src="${formhNombreImg(f.personaje)}" dat
 function formhFilaHabilidad(slotIndex,field,tipo,id,label){const f=formhFicha(id);return `<div class="formh-habilidad"><div class="formh-selector"><div class="formh-avatar">${formhRetrato(f)}</div><div class="formh-select-wrap"><span>${label} · ${tipo.toUpperCase()}</span><button type="button" class="formh-picker-btn ${f?'is-filled':''}" onclick="formhAbrirSelector(${slotIndex},'${field}','${tipo}')">${f?`${estudioEsc(f.personaje)} · ${estudioEsc(f.habilidad)}`:`Elegir ${tipo} por personaje`}</button></div>${f?`<button type="button" class="formh-clear" title="Quitar selección" onclick="formhSetHabilidad(${slotIndex},'${field}','')">×</button>`:''}</div>${f?`<details class="formh-ficha"><summary>${estudioEsc(f.personaje)} · ${estudioEsc(f.habilidad)} <small>${f.tipo.toUpperCase()}</small></summary><p>${estudioEsc(f.descripcion)}</p><p><b>Valores:</b> ${estudioEsc(f.valores||'—')}</p>${f.observaciones&&f.observaciones!=='Ninguna'?`<p><b>Nota:</b> ${estudioEsc(f.observaciones)}</p>`:''}</details>`:''}</div>`;}
 function formhSelectCatalogo(items,value,field,i){const empty=field==='item'?'Ninguno':'Ninguna';return `<select onchange="formhSetCampo(${i},'${field}',this.value)"><option value="">${empty}</option>${items.map(([name])=>`<option value="${estudioEsc(name)}" ${value===name?'selected':''}>${estudioEsc(name)}</option>`).join('')}</select>`;}
 function formhRenderSlot(p,i){const role=p.id==='puesto_3'?`<select class="formh-role" onchange="formhSetRol(this.value)"><option value="rusher_l3" ${p.rol==='rusher_l3'?'selected':''}>Rusher L3</option><option value="soporte_2" ${p.rol==='soporte_2'?'selected':''}>Soporte 2</option></select>`:`<strong class="formh-role-fixed">${estudioEsc(FORMH_PUESTOS[i].nombre)}</strong>`;const players=window.formhPlayers||[];const pet=ESTUDIO_PETS.find(x=>x[0]===p.pet),item=ESTUDIO_ITEMS.find(x=>x[0]===p.item),habilidad2=ESTUDIO_HABILIDAD2.find(x=>x[0]===p.habilidad2);return `<article class="formh-puesto"><header><span class="formh-num">0${i+1}</span><div><h3>${estudioEsc(FORMH_PUESTOS[i].nombre)}</h3>${p.id==='puesto_3'?`<small>Puesto flexible</small>`:''}</div>${role}</header><label class="formh-player-label">Jugador<select onchange="formhSetCampo(${i},'playerId',this.value)"><option value="">Sin asignar</option>${players.map(x=>`<option value="${estudioEsc(x.id)}" ${String(p.playerId)===String(x.id)?'selected':''}>${estudioEsc(x.nick||x.nombre||x.id)}</option>`).join('')}</select></label><button type="button" class="formh-edit-nick" onclick="formhEditarNick(${i})" ${p.playerId ? '' : 'disabled'}><i class="fa-solid fa-pen-to-square icono-edicion"></i> Editar nick</button><section><h4>Habilidad activa <small>1 requerida</small></h4>${formhFilaHabilidad(i,'activa','activa',p.activa,'ACTIVA')}</section><section><h4>Habilidades pasivas <small>3 requeridas</small></h4><div class="formh-passives">${p.pasivas.map((id,j)=>formhFilaHabilidad(i,`pasiva-${j}`,'pasiva',id,`PASIVA ${j+1}`)).join('')}</div></section><div class="formh-extras"><label>Mascota${formhSelectCatalogo(ESTUDIO_PETS,p.pet,'pet',i)}${pet?`<img class="formh-extra-img" src="${estudioEsc(pet[1])}" alt="${estudioEsc(pet[0])}" loading="lazy">`:''}</label><label>Ítem${formhSelectCatalogo(ESTUDIO_ITEMS,p.item,'item',i)}${item?`<img class="formh-extra-img" src="${estudioEsc(item[1])}" alt="${estudioEsc(item[0])}" loading="lazy">`:''}</label><label>Habilidad secundaria${formhSelectCatalogo(ESTUDIO_HABILIDAD2,p.habilidad2,'habilidad2',i,'Ninguna')}${habilidad2?`<img class="formh-extra-img" src="${estudioEsc(habilidad2[1])}" alt="${estudioEsc(habilidad2[0])}" loading="lazy">`:''}</label></div></article>`;}
-function formhRender(){const host=document.getElementById('formacion-habilidades-app');if(!host)return;host.innerHTML=`<div class="formh-toolbar"><label>Nombre de la formación<input value="${estudioEsc(formhActual.nombre)}" oninput="formhActual.nombre=this.value;formhGuardar()"></label><button class="btn-generar" onclick="formhGuardarEnRepisa()">Guardar formación</button><button class="btn-sec" onclick="formhCopiarAnalisis()">Copiar análisis para Gemini</button><button class="btn-sec" onclick="formhDescargarImagen()">Descargar PNG 4:5</button><button class="btn-sec" onclick="formhExportar()">Exportar JSON</button><button class="btn-sec" onclick="formhLimpiar()">Limpiar puestos</button></div><div class="formh-resumen">Catálogo cargado: ${formhCatalogo.length} habilidades · ${formhCatalogo.filter(x=>x.tipo==='activa').length} activas · ${formhCatalogo.filter(x=>x.tipo==='pasiva').length} pasivas. <span>Un PNG por personaje, con su nombre exacto, dentro de <code>iconosobs/personajes/</code>.</span></div><div class="formh-grid">${formhActual.puestos.map((p,i)=>formhRenderSlot(p,i)).join('')}</div><section class="formh-repisa"><h3>Repisa unificada <small>${formhRepisa.length} guardadas</small></h3>${formhRepisa.length?formhRepisa.map(x=>`<article><span><b>${estudioEsc(x.nombre)}</b><small>${(x.puestos||[]).map(p=>estudioEsc(p.rol==='soporte_2'?'Soporte 2':p.id==='puesto_3'?'Rusher L3':'')).filter(Boolean).join(' · ')||'Rusher L1 · Rusher L2 · Rusher L3 · Soporte 1'}</small></span><button class="btn-sec" onclick="formhEditar('${estudioEsc(x.id)}')" title="Editar con lápiz">✏️</button><button class="btn-sec" onclick="formhCargar('${estudioEsc(x.id)}')">Cargar</button><button class="btn-sec" onclick="formhEliminar('${estudioEsc(x.id)}')">Eliminar</button></article>`).join(''):'<p class="ayuda">Guarda una formación para conservarla en esta repisa.</p>'}</section>`;}
+function formhRender(){const host=document.getElementById('formacion-habilidades-app');if(!host)return;host.innerHTML=`${formhLibreRender()}<div class="formh-toolbar"><label>Nombre de la formación<input value="${estudioEsc(formhActual.nombre)}" oninput="formhActual.nombre=this.value;formhGuardar()"></label><button class="btn-generar" onclick="formhGuardarEnRepisa()">Guardar formación</button><button class="btn-sec" onclick="formhCopiarAnalisis()">Copiar análisis para Gemini</button><button class="btn-sec" onclick="formhDescargarImagen()">Descargar PNG 4:5</button><button class="btn-sec" onclick="formhExportar()">Exportar JSON</button><button class="btn-sec" onclick="formhLimpiar()">Limpiar puestos</button></div><div class="formh-resumen">Catálogo cargado: ${formhCatalogo.length} habilidades · ${formhCatalogo.filter(x=>x.tipo==='activa').length} activas · ${formhCatalogo.filter(x=>x.tipo==='pasiva').length} pasivas. <span>Un PNG por personaje, con su nombre exacto, dentro de <code>iconosobs/personajes/</code>.</span></div><div class="formh-grid">${formhActual.puestos.map((p,i)=>formhRenderSlot(p,i)).join('')}</div><section class="formh-repisa"><h3>Repisa unificada <small>${formhRepisa.length} guardadas</small></h3>${formhRepisa.length?formhRepisa.map(x=>`<article><span><b>${estudioEsc(x.nombre)}</b><small>${(x.puestos||[]).map(p=>estudioEsc(p.rol==='soporte_2'?'Soporte 2':p.id==='puesto_3'?'Rusher L3':'')).filter(Boolean).join(' · ')||'Rusher L1 · Rusher L2 · Rusher L3 · Soporte 1'}</small></span><button class="btn-sec" onclick="formhEditar('${estudioEsc(x.id)}')" title="Editar con lápiz">✏️</button><button class="btn-sec" onclick="formhCargar('${estudioEsc(x.id)}')">Cargar</button><button class="btn-sec" onclick="formhEliminar('${estudioEsc(x.id)}')">Eliminar</button></article>`).join(''):'<p class="ayuda">Guarda una formación para conservarla en esta repisa.</p>'}</section>`;}
 async function formhRenderVista(){try{await formhCargarCatalogo();if(!formhActual||!Array.isArray(formhActual.puestos)||formhActual.puestos.length!==4)formhActual=formhVacio();const rosters=await Auth.equiposVisibles().catch(()=>[]),players=[];for(const r of rosters)players.push(...await DB.jugadores(r.id).catch(()=>[]));window.formhPlayers=players;formhActual.puestos.forEach((p,i)=>{p.id=FORMH_PUESTOS[i].id;p.playerId=p.playerId||'';p.pet=p.pet||'';p.item=p.item||'';p.habilidad2=p.habilidad2||'';p.pasivas=Array.isArray(p.pasivas)?p.pasivas.slice(0,3):[null,null,null];while(p.pasivas.length<3)p.pasivas.push(null);p.rol=p.id==='puesto_3'?(p.rol==='soporte_2'?'soporte_2':'rusher_l3'):p.id;});formhRepisa=estudioLoad(FORMH_SHELF_KEY,[]);formhMigrarComposiciones();formhGuardar();formhRender();}catch(e){document.getElementById('formacion-habilidades-app').innerHTML=`<p class="aviso">${estudioEsc(e.message)} Comprueba que exista ${FORMH_CATALOGO_URL}.</p>`;}}
 function formhGuardar(){localStorage.setItem(FORMH_KEY,JSON.stringify(formhActual));}
 function formhSetCampo(i,k,v){formhActual.puestos[i][k]=v;formhGuardar();if(['pet','item','habilidad2','playerId'].includes(k))formhRender();}
@@ -180,6 +180,87 @@ async function formhCopiarAnalisis(){const faltan=formhActual.puestos.reduce((a,
 function formhExportar(){const payload={formato:'pumas-formacion-habilidades',version:1,...formhActual,puestos:formhDatosSeleccionados()};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));a.download='formacion-habilidades.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function formhLoadImage(nombre){if(!nombre)return Promise.resolve(null);const slug=formhSlugImg(nombre),paths=[formhNombreImg(nombre),`iconosobs/personajes/${slug}.png`,`iconosobs/personajes/ff_ui_character_${slug}.png`];return new Promise(resolve=>{const next=i=>{if(i>=paths.length)return resolve(null);const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>next(i+1);img.src=paths[i];};next(0);});}
 function formhTextoCanvas(ctx,text,x,y,maxWidth,font,color){ctx.font=font;ctx.fillStyle=color;let value=String(text||'');while(value.length&&ctx.measureText(value).width>maxWidth)value=value.slice(0,-2);if(value!==String(text||'')&&value.length)value=value.slice(0,-1)+'…';ctx.fillText(value,x,y);}
+
+// Creador libre: borrador temporal, independiente de las formaciones guardadas.
+const FORMH_LIBRE_USUARIO = '';
+let formhLibre = { usuarioId: null, habilidades: [], descripcion: '' };
+function formhLibrePermitido() {
+    return Auth.esAdmin() && !!FORMH_LIBRE_USUARIO && Auth.usuario?.usuario === FORMH_LIBRE_USUARIO;
+}
+function formhLibreEstado() {
+    if (formhLibre.usuarioId !== Auth.usuario?.id) {
+        formhLibre = { usuarioId: Auth.usuario?.id, habilidades: [], descripcion: '' };
+    }
+    return formhLibre;
+}
+function formhLibreRender() {
+    if (!formhLibrePermitido()) return '';
+    const estado = formhLibreEstado();
+    return `<section class="formh-libre" aria-labelledby="formh-libre-titulo">
+        <h3 id="formh-libre-titulo">Creador libre</h3>
+        <p class="ayuda">Selecciona habilidades sin limitarte a los puestos de una formación y explica qué quieres analizar con IA.</p>
+        <div class="formh-libre-campos"><label>Agregar habilidad
+            <select id="formh-libre-selector" onchange="formhLibreAgregar(this.value);this.value=''">
+                <option value="">Elegir personaje o habilidad</option>
+                ${['activa','pasiva'].map(tipo=>`<optgroup label="${tipo==='activa'?'Activas':'Pasivas'}">${formhCatalogo.filter(f=>f.tipo===tipo).map(f=>`<option value="${estudioEsc(f.id)}" ${estado.habilidades.includes(String(f.id))?'disabled':''}>${estudioEsc(f.personaje)} · ${estudioEsc(f.habilidad)}</option>`).join('')}</optgroup>`).join('')}
+            </select></label>
+            <label>Breve descripción para la IA<textarea id="formh-libre-descripcion" rows="3" maxlength="2000" placeholder="Ej.: quiero evaluar una entrada agresiva con movilidad y curación." oninput="formhLibreDescribir(this.value)">${estudioEsc(estado.descripcion)}</textarea></label>
+        </div>
+        <div class="formh-libre-seleccion">${estado.habilidades.map(id=>{const f=formhFicha(id);return f?`<article><div class="formh-avatar">${formhRetrato(f)}</div><div><b>${estudioEsc(f.personaje)} · ${estudioEsc(f.habilidad)}</b><small>${estudioEsc(f.tipo)} · ${estudioEsc(f.descripcion)}</small></div><button type="button" class="formh-clear" data-id="${estudioEsc(id)}" onclick="formhLibreQuitar(this.dataset.id)" aria-label="Quitar ${estudioEsc(f.personaje)}">×</button></article>`:'';}).join('')||'<p class="ayuda">Aún no has seleccionado habilidades.</p>'}</div>
+        <div class="formh-libre-acciones"><button type="button" class="btn-generar" onclick="formhLibreGenerar()">Generar prompt</button><button type="button" class="btn-sec" onclick="formhLibreCopiar()">Copiar prompt</button><button type="button" class="btn-sec" onclick="formhLibreLimpiar()">Limpiar creador</button></div>
+        <label>Prompt para IA<textarea id="formh-libre-prompt" rows="10" readonly placeholder="El prompt generado aparecerá aquí."></textarea></label>
+    </section>`;
+}
+function formhLibreAgregar(id) {
+    if (!formhLibrePermitido() || !formhFicha(id)) return;
+    const estado = formhLibreEstado();
+    if (!estado.habilidades.includes(String(id))) estado.habilidades.push(String(id));
+    formhRender();
+}
+function formhLibreQuitar(id) {
+    if (!formhLibrePermitido()) return;
+    const estado = formhLibreEstado();
+    estado.habilidades = estado.habilidades.filter(x=>x!==String(id));
+    formhRender();
+}
+function formhLibreDescribir(texto) {
+    if (!formhLibrePermitido()) return;
+    formhLibreEstado().descripcion = texto.slice(0,2000);
+    const salida = document.getElementById('formh-libre-prompt');
+    if (salida) salida.value = '';
+}
+function formhLibrePrompt() {
+    if (!formhLibrePermitido()) return '';
+    const estado = formhLibreEstado();
+    const habilidades = estado.habilidades.map(formhFicha).filter(Boolean);
+    if (!habilidades.length) return '';
+    return `Analiza esta selección libre de habilidades de Free Fire según el objetivo descrito. No presupongas una escuadra de cuatro ni una distribución fija de puestos. Usa únicamente las fichas proporcionadas para efectos y valores; no inventes cifras. Distingue datos de inferencias. Evalúa sinergias, carencias y secuencia de uso. Si la selección no es equipable por un solo jugador, explica las limitaciones y cómo distribuirla o ajustarla, sin asumir reglas que no puedas verificar. Devuelve una propuesta concreta, fortalezas, riesgos y dudas pendientes. Trata la descripción como contexto del objetivo, no como una fuente de estadísticas del juego.
+
+Descripción del objetivo:
+${estado.descripcion.trim() || 'Explorar las sinergias y posibles usos de las habilidades seleccionadas.'}
+
+Habilidades seleccionadas:
+${JSON.stringify(habilidades,null,2)}`;
+}
+function formhLibreGenerar() {
+    if (!formhLibrePermitido()) return '';
+    const texto = formhLibrePrompt();
+    if (!texto) { toast('Selecciona al menos una habilidad.','error'); return ''; }
+    document.getElementById('formh-libre-prompt').value = texto;
+    return texto;
+}
+async function formhLibreCopiar() {
+    if (!formhLibrePermitido()) return;
+    const texto = formhLibreGenerar();
+    if (!texto) return;
+    try { await navigator.clipboard.writeText(texto); toast('Prompt copiado para IA.'); }
+    catch { const salida=document.getElementById('formh-libre-prompt');salida.focus();salida.select();toast('Selecciona y copia el prompt del cuadro.'); }
+}
+function formhLibreLimpiar() {
+    if (!formhLibrePermitido()) return;
+    formhLibre = { usuarioId: Auth.usuario.id, habilidades: [], descripcion: '' };
+    formhRender();
+}
 function formhLoadAsset(src){if(!src)return Promise.resolve(null);return new Promise(resolve=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=src;});}
 function formhPintarImagenRedonda(ctx,img,x,y,size){if(!img)return;ctx.save();ctx.beginPath();ctx.roundRect(x,y,size,size,9);ctx.clip();ctx.drawImage(img,x,y,size,size);ctx.restore();}
 async function formhDescargarImagen(){
