@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pumas Gaming Dev Lab | Gestión de Desarrollo Competitivo</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css?v=46">
-    <link rel="stylesheet" href="css/moderno.css?v=36">
+    <link rel="stylesheet" href="css/style.css?v=48">
+    <link rel="stylesheet" href="css/moderno.css?v=41">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -152,8 +152,8 @@
             <i class="fa-solid fa-palette"></i><span>Personalizar colores</span>
         </button>
         <div class="sb-theme-panel" id="sb-theme-panel" hidden>
-            <label>Color principal<input id="user-theme-primary" type="color" value="#00f0ff" oninput="guardarTemaUsuario()"></label>
-            <label>Color secundario<input id="user-theme-secondary" type="color" value="#b0b5c0" oninput="guardarTemaUsuario()"></label>
+            <label>Color principal<input id="user-theme-primary" type="color" value="#ffffff" oninput="guardarTemaUsuario()"></label>
+            <label>Color secundario<input id="user-theme-secondary" type="color" value="#a1a1a6" oninput="guardarTemaUsuario()"></label>
             <button type="button" class="btn-link" onclick="restablecerTemaUsuario()">Restablecer colores</button>
             <small>Se guarda para tu cuenta en este navegador.</small>
         </div>
@@ -181,8 +181,21 @@
 
 <!-- ================= PANEL DE INICIO ================= -->
 <section id="inicio" class="view-section active-view">
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="hero-bg-grid"></div>
+        <div class="hero-content">
+            <div class="hero-badge">
+                <i class="fa-solid fa-paw"></i>
+                <span>Pumas Gaming</span>
+            </div>
+            <h1 class="hero-title">Dev Lab</h1>
+            <p class="hero-subtitle">Centro de desarrollo competitivo · Free Fire</p>
+            <div class="hero-stats" id="panel-bienvenida"></div>
+        </div>
+    </div>
+
     <div class="contenedor">
-        <div id="panel-bienvenida"></div>
         <div class="grid-kpis" id="panel-kpis"></div>
 
         <div class="dos-col">
@@ -993,7 +1006,7 @@
 <script src="js/mapeador-caidas-data.js?v=1"></script>
 <script src="js/mapeador-caidas-analisis.js?v=4"></script>
 <script src="js/mapeador-caidas.js?v=25"></script>
-<script src="js/estudio.js?v=12"></script>
+<script src="js/estudio.js?v=13"></script>
 <script src="js/mapstream.js?v=15"></script>
 <script src="js/mapstream-replay.js?v=19"></script>
 <script src="js/mapstream-informe.js?v=19"></script>
@@ -1003,7 +1016,7 @@
 <script src="js/resultados.js?v=14"></script>
 <script src="js/administrativo.js?v=1"></script>
 <script src="js/caidas-privados.js?v=3"></script>
-<script src="js/app.js?v=31"></script>
+<script src="js/app.js?v=32"></script>
 <script src="js/animaciones.js?v=14"></script>
 </body>
 </html>

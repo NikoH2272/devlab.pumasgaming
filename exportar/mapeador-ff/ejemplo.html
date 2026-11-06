@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa FF · Pumas Gaming</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root { --c: #00f0ff; --t: #e8f6f8; --s: #9aa3b2; --g: #5d6577; --f: #05060a; --p: #0b0d14; --l: rgba(0,240,255,.16); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--f); color: var(--t); font-family: 'Rajdhani', sans-serif; font-size: 15px; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+
+/* ── Barra superior ── */
+#barra { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(0,0,0,.55); border-bottom: 1px solid var(--l); flex-shrink: 0; flex-wrap: wrap; }
+#titulo { font-family: 'Orbitron', sans-serif; font-size: 13px; letter-spacing: 2px; color: var(--c); white-space: nowrap; }
+#info-partida { color: var(--s); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.btn { font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 1px; padding: 7px 13px; background: transparent; color: var(--c); border: 1px solid rgba(0,240,255,.4); cursor: pointer; white-space: nowrap; transition: background .15s; }
+.btn:hover { background: rgba(0,240,255,.1); }
+.btn.activo { background: var(--c); color: #03060a; }
+#btn-archivo { position: relative; overflow: hidden; }
+#btn-archivo input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* ── Canvas ── */
+#visor { flex: 1; position: relative; overflow: hidden; }
+#canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+#canvas:active { cursor: grabbing; }
+
+/* ── Barra de tiempo ── */
+#controles { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(0,0,0,.55); border-top: 1px solid var(--l); flex-shrink: 0; }
+#btn-play { font-family: 'Orbitron', sans-serif; font-size: 12px; padding: 6px 14px; background: transparent; color: var(--c); border: 1px solid rgba(0,240,255,.4); cursor: pointer; white-space: nowrap; }
+#btn-play:hover { background: rgba(0,240,255,.1); }
+#tiempo-txt { font-family: 'Orbitron', sans-serif; font-size: 11px; color: var(--c); min-width: 70px; text-align: right; }
+#scrubber { flex: 1; accent-color: var(--c); cursor: pointer; }
+
+/* ── Zona de carga ── */
+#zona-carga { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(4,5,10,.88); }
+#zona-carga.oculto { display: none; }
+#zona-carga h2 { font-family: 'Orbitron', sans-serif; font-size: 14px; letter-spacing: 2px; color: var(--c); }
+#zona-carga p { color: var(--s); font-size: 13px; text-align: center; max-width: 360px; }
+#zona-carga .acciones { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+#drop-area { border: 1px dashed rgba(0,240,255,.5); padding: 20px 32px; text-align: center; cursor: pointer; position: relative; transition: background .15s; }
+#drop-area:hover, #drop-area.encima { background: rgba(0,240,255,.06); }
+#drop-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+#drop-area b { font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 2px; display: block; margin-bottom: 6px; }
+#drop-area span { color: var(--s); font-size: 12px; }
+
+#aviso { color: #f5c542; font-size: 13px; text-align: center; display: none; }
+
+/* ── Pie ── */
+footer { padding: 6px 12px; background: rgba(0,0,0,.4); border-top: 1px solid var(--l); font-size: 11px; color: var(--g); text-align: center; flex-shrink: 0; }
+footer a { color: var(--c); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div id="barra">
+  <span id="titulo">MAPA FF</span>
+  <span id="info-partida">Carga un replay o usa los datos de demo</span>
+  <button class="btn" id="btn-demo">DEMO</button>
+  <button class="btn" id="btn-archivo">
+    CARGAR REPLAY
+    <input type="file" accept=".bin,.json" multiple id="archivo-input">
+  </button>
+  <button class="btn" id="btn-captura">CAPTURA PNG</button>
+  <button class="btn" id="btn-centrar">CENTRAR</button>
+</div>
+
+<div id="visor">
+  <canvas id="canvas"></canvas>
+  <div id="zona-carga">
+    <h2>VISOR DE MAPA · FREE FIRE</h2>
+    <p>Carga el <strong>.bin</strong> y el <strong>.json</strong> del replay del juego (mismo nombre de archivo), o prueba con los datos de demo.</p>
+    <div class="acciones">
+      <div id="drop-area">
+        <input type="file" accept=".bin,.json" multiple id="drop-input">
+        <b>ARRASTRA AQUÍ</b>
+        <span>.bin + .json del replay</span>
+      </div>
+    </div>
+    <div class="acciones">
+      <button class="btn" id="btn-demo2">CARGAR DEMO</button>
+    </div>
+    <p id="aviso"></p>
+  </div>
+</div>
+
+<div id="controles">
+  <button id="btn-play">▶ PLAY</button>
+  <input type="range" id="scrubber" min="0" max="1000" step="1" value="0">
+  <span id="tiempo-txt">0:00 / 0:00</span>
+</div>
+
+<footer>Pumas Gaming · <a href="https://www.instagram.com/coach.nikoh/" target="_blank" rel="noopener">@coach.nikoh</a> · Motor: <a href="https://github.com/coach-nikoh/devlab.pumasgaming" target="_blank" rel="noopener">Dev Lab</a></footer>
+
+<!--
+  INSTRUCCIONES DE INTEGRACIÓN
+  ════════════════════════════
+  1. Copia estos archivos al servidor de tu página:
+       mapeador-ff.js          ← el motor (este directorio)
+       iconosobs/mapas/*.png   ← los 5 mapas (cópialos desde el Dev Lab)
+
+  2. Ajusta MapStream.rutaMapas si los .png están en otra ruta:
+       MapStream.rutaMapas = '/assets/mapas/';
+
+  3. Incluye el script en tu página:
+       <script src="mapeador-ff.js"></script>
+
+  4. Crea un canvas y úsalo:
+       const ms = new MapStream(miCanvas);
+       ms.cargar(MapStream.demo());   // o un replay real
+       ms.reproducir();
+
+  API rápida de MapStream:
+    ms.cargar(replay)       carga una partida (formato JSON de MapStream)
+    ms.reproducir()         empieza la reproducción
+    ms.pausar()             pausa
+    ms.ir(segundos)         salta a ese instante (snapshot estático)
+    ms.velocidad = 2        velocidad de reproducción
+    ms.capturaPNG()         → Promise<Blob> con la imagen del cuadro actual
+    MapStream.demo()        partida de prueba (datos inventados)
+    FFReplay.leerVarios(pares)  convierte .bin + .json en una partida
+-->
+
+<script src="mapeador-ff.js"></script>
+<script>
+// ── Configuración ──────────────────────────────────────────────
+// Ajusta esta ruta si los .png de los mapas están en otra carpeta.
+// Por defecto apunta a iconosobs/mapas/ relativo a esta página.
+MapStream.rutaMapas = '../../iconosobs/mapas/';
+
+// ── Instancia ──────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ms = new MapStream(canvas, {
+    alCambiarTiempo: actualizarTiempo,
+    alTerminar: () => { document.getElementById('btn-play').textContent = '▶ PLAY'; }
+});
+
+// ── Helpers de UI ─────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = s => { const m = Math.floor(s / 60), seg = Math.floor(s % 60); return `${m}:${seg.toString().padStart(2, '0')}`; };
+
+function actualizarTiempo(t) {
+    const dur = ms.replay?.duracion ?? 0;
+    $('tiempo-txt').textContent = `${fmt(t)} / ${fmt(dur)}`;
+    $('scrubber').max = Math.round(dur);
+    $('scrubber').value = Math.round(t);
+}
+
+function cargar(replay, nombre) {
+    ms.cargar(replay);
+    $('info-partida').textContent = [replay.nombre, replay.mapa, replay.fecha ? replay.fecha.slice(0, 10) : ''].filter(Boolean).join(' · ');
+    $('zona-carga').classList.add('oculto');
+    $('btn-play').textContent = '▶ PLAY';
+    actualizarTiempo(ms.tiempo);
+    if (nombre) console.log('Partida cargada:', nombre);
+}
+
+function mostrarAviso(msg) {
+    const a = $('aviso');
+    a.textContent = msg;
+    a.style.display = msg ? 'block' : 'none';
+}
+
+// ── Demo ──────────────────────────────────────────────────────
+function cargarDemo() { cargar(MapStream.demo(), 'demo'); }
+$('btn-demo').addEventListener('click', cargarDemo);
+$('btn-demo2').addEventListener('click', cargarDemo);
+
+// ── Play / Pausa ──────────────────────────────────────────────
+$('btn-play').addEventListener('click', () => {
+    if (!ms.replay) return cargarDemo();
+    ms.alternar();
+    $('btn-play').textContent = ms.reproduciendo ? '⏸ PAUSA' : '▶ PLAY';
+});
+
+// ── Scrubber ──────────────────────────────────────────────────
+$('scrubber').addEventListener('input', e => {
+    if (!ms.replay) return;
+    ms.pausar();
+    $('btn-play').textContent = '▶ PLAY';
+    ms.ir(Number(e.target.value));
+});
+
+// ── Centrar ──────────────────────────────────────────────────
+$('btn-centrar').addEventListener('click', () => ms.centrar?.());
+
+// ── Captura PNG ───────────────────────────────────────────────
+$('btn-captura').addEventListener('click', async () => {
+    if (!ms.replay) return;
+    const blob = await ms.capturaPNG();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `mapa-${ms.replay.mapa ?? 'FF'}-${Math.round(ms.tiempo)}s.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+});
+
+// ── Carga de archivos ─────────────────────────────────────────
+async function procesarArchivos(lista) {
+    const archivos = [...lista];
+    if (!archivos.length) return;
+    mostrarAviso('Leyendo…');
+    const bins = archivos.filter(f => /\.bin$/i.test(f.name));
+    const jsons = archivos.filter(f => /\.json$/i.test(f.name));
+    const base = n => n.replace(/\.(bin|json)$/i, '');
+
+    if (bins.length) {
+        const pares = bins.map(b => [b, jsons.find(j => base(j.name) === base(b.name))]).filter(p => p[1]);
+        if (!pares.length) return mostrarAviso('Falta el .json del replay. Sube el .bin y el .json con el mismo nombre a la vez.');
+        try {
+            const grupos = new Map();
+            for (const [b, j] of pares) {
+                const info = JSON.parse((await j.text()).replace(/^﻿/, ''));
+                const id = String(info.MatchID || base(b.name));
+                if (!grupos.has(id)) grupos.set(id, { info, pares: [] });
+                grupos.get(id).pares.push([b, info]);
+            }
+            const { info, pares: gPares } = [...grupos.values()][0];
+            const binPares = [];
+            for (const [b, inf] of gPares) binPares.push([new Uint8Array(await b.arrayBuffer()), inf]);
+            const replay = FFReplay.leerVarios(binPares);
+            cargar(replay, pares[0][0].name);
+            mostrarAviso('');
+        } catch (e) {
+            mostrarAviso('Error al leer el replay: ' + (e.message || e));
+        }
+        return;
+    }
+
+    const json = jsons[0];
+    if (!json) return mostrarAviso('Elige un .json exportado de MapStream, o el .bin + .json del replay del juego.');
+    try {
+        const datos = JSON.parse((await json.text()).replace(/^﻿/, ''));
+        // Acepta tanto el formato nativo de MapStream como el de QG Pro
+        const replay = datos.equipos ? MapStream.normalizar(datos) : MapStream.desdeQGPro(datos);
+        cargar(replay, json.name);
+        mostrarAviso('');
+    } catch (e) {
+        mostrarAviso('Error al leer el archivo: ' + (e.message || e));
+    }
+}
+
+$('archivo-input').addEventListener('change', e => procesarArchivos(e.target.files));
+$('drop-input').addEventListener('change', e => procesarArchivos(e.target.files));
+
+['dragenter', 'dragover'].forEach(ev => {
+    $('drop-area').addEventListener(ev, e => { e.preventDefault(); $('drop-area').classList.add('encima'); });
+    document.addEventListener(ev, e => e.preventDefault());
+});
+['dragleave', 'drop'].forEach(ev => $('drop-area').addEventListener(ev, () => $('drop-area').classList.remove('encima')));
+document.addEventListener('drop', e => { e.preventDefault(); procesarArchivos(e.dataTransfer.files); });
+</script>
+</body>
+</html>

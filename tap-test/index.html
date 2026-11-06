@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Tap Speed & Reaction Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg: #0f0f13;
+      --surface: #1a1a24;
+      --accent: #7c3aed;
+      --accent2: #06b6d4;
+      --success: #10b981;
+      --danger: #ef4444;
+      --text: #f1f5f9;
+      --muted: #64748b;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    /* ── SCREENS ── */
+    .screen {
+      display: none;
+      height: 100vh;
+      width: 100vw;
+      flex-direction: row;
+      align-items: stretch;
+    }
+    .screen.active { display: flex; }
+
+    /* ── MENU ── */
+    #menu {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 24px;
+    }
+    #menu h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    #menu p { color: var(--muted); font-size: 0.85rem; margin-bottom: 16px; }
+    .menu-btn {
+      width: 100%;
+      max-width: 320px;
+      padding: 18px 24px;
+      border-radius: 16px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: transform 0.1s, opacity 0.1s;
+    }
+    .menu-btn:active { transform: scale(0.97); opacity: 0.85; }
+    .menu-btn.tap    { background: var(--accent); color: #fff; }
+    .menu-btn.react  { background: var(--accent2); color: #0f172a; }
+    .menu-btn .icon  { font-size: 1.5rem; }
+    .menu-btn .info  { text-align: left; }
+    .menu-btn .info small { display: block; font-size: 0.75rem; opacity: 0.75; font-weight: 400; }
+
+    /* ── LEFT PANEL (stats / info) ── */
+    .left-panel {
+      width: 160px;
+      flex-shrink: 0;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 16px 12px;
+      border-right: 1px solid #ffffff0a;
+    }
+    .stat-box {
+      text-align: center;
+      width: 100%;
+    }
+    .stat-box .val {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .stat-box .lbl {
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+    .divider { width: 60%; height: 1px; background: #ffffff12; }
+
+    /* ── RIGHT PANEL (back btn + extra) ── */
+    .right-panel {
+      width: 60px;
+      flex-shrink: 0;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-left: 1px solid #ffffff0a;
+    }
+    .back-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      transition: color 0.15s;
+    }
+    .back-btn:active { color: var(--text); }
+    .history-mini {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: center;
+      flex: 1;
+      justify-content: center;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #ffffff20;
+      transition: background 0.3s;
+    }
+    .dot.good    { background: var(--success); }
+    .dot.ok      { background: #f59e0b; }
+    .dot.bad     { background: var(--danger); }
+
+    /* ── CENTER ZONE ── */
+    .center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ── TAP SPEED ── */
+    #tapScreen .center { background: radial-gradient(ellipse at center, #2d1b6922 0%, transparent 70%); }
+    #tapScreen .center .big-label {
+      font-size: 5rem;
+      font-weight: 900;
+      line-height: 1;
+      transition: transform 0.07s;
+    }
+    #tapScreen .center .big-label.pop { transform: scale(1.15); }
+    #tapScreen .center .sub-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .timer-bar-wrap {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 6px;
+      background: #ffffff0d;
+    }
+    .timer-bar {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.1s linear;
+      border-radius: 0 3px 3px 0;
+    }
+
+    /* ── REACTION ── */
+    #reactScreen .center {
+      background: var(--surface);
+      transition: background 0.15s;
+    }
+    #reactScreen .center.waiting { background: var(--danger); }
+    #reactScreen .center.go      { background: var(--success); }
+    #reactScreen .center.too-early { background: #f59e0b; }
+
+    .react-label {
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 0 24px;
+      pointer-events: none;
+    }
+    .react-sub {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.6);
+      margin-top: 8px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    /* ── RESULTS OVERLAY ── */
+    .result-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: #0f0f13ee;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      z-index: 10;
+    }
+    .result-overlay.show { display: flex; }
+    .result-title { font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .result-big   { font-size: 3.5rem; font-weight: 900; line-height: 1; }
+    .result-sub   { font-size: 0.8rem; color: var(--muted); }
+    .result-again {
+      margin-top: 16px;
+      padding: 12px 32px;
+      border-radius: 12px;
+      border: 2px solid var(--accent);
+      background: none;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .result-again:active { background: var(--accent); }
+
+    /* ── RIPPLE ── */
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      transform: scale(0);
+      animation: ripple-anim 0.4s linear;
+      pointer-events: none;
+      background: rgba(255,255,255,0.18);
+    }
+    @keyframes ripple-anim {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    /* ── BEST BADGE ── */
+    .best-badge {
+      font-size: 0.65rem;
+      background: #f59e0b22;
+      color: #f59e0b;
+      border-radius: 6px;
+      padding: 2px 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ MENU ══════════════════════════════════════════ -->
+<div id="menu" class="screen active">
+  <h1>⚡ Speed Tests</h1>
+  <p>Elige un modo de prueba</p>
+
+  <button class="menu-btn tap" onclick="startTap()">
+    <span class="icon">👆</span>
+    <span class="info">
+      Velocidad de Toques
+      <small>¿Cuántos taps en 10 s?</small>
+    </span>
+  </button>
+
+  <button class="menu-btn react" onclick="startReact()">
+    <span class="icon">🟢</span>
+    <span class="info">
+      Tiempo de Reacción
+      <small>Toca cuando veas el verde</small>
+    </span>
+  </button>
+</div>
+
+<!-- ══ TAP SPEED SCREEN ══════════════════════════════ -->
+<div id="tapScreen" class="screen">
+
+  <div class="left-panel">
+    <div class="stat-box">
+      <div class="val" id="tapCount" style="color:var(--accent)">0</div>
+      <div class="lbl">Toques</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat-box">
+      <div class="val" id="tapTimer" style="color:var(--accent2)">10</div>
+      <div class="lbl">Segundos</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat-box">
+      <div class="val" id="tapTps" style="font-size:1.4rem">—</div>
+      <div class="lbl">Taps/s</div>
+    </div>
+    <div class="stat-box" id="tapBestBox" style="display:none">
+      <div class="best-badge">🏆 Récord</div>
+      <div class="val" id="tapBest" style="font-size:1.2rem;color:#f59e0b">—</div>
+      <div class="lbl">Taps/s</div>
+    </div>
+  </div>
+
+  <div class="center" id="tapZone">
+    <div class="big-label" id="tapBigNum">TAP</div>
+    <div class="sub-label" id="tapSubLabel">Toca aquí para empezar</div>
+    <div class="timer-bar-wrap"><div class="timer-bar" id="timerBar" style="width:100%"></div></div>
+
+    <div class="result-overlay" id="tapResult">
+      <div class="result-title">Resultado</div>
+      <div class="result-big" id="tapResultNum">—</div>
+      <div class="result-sub" id="tapResultSub">toques en 10 s</div>
+      <div class="result-sub" id="tapResultTps"></div>
+      <button class="result-again" onclick="resetTap()">Intentar de nuevo</button>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <button class="back-btn" onclick="goMenu()">✕</button>
+    <div class="history-mini" id="tapHistory"></div>
+    <div style="height:32px"></div>
+  </div>
+</div>
+
+<!-- ══ REACTION SCREEN ═══════════════════════════════ -->
+<div id="reactScreen" class="screen">
+
+  <div class="left-panel">
+    <div class="stat-box">
+      <div class="val" id="reactLast" style="color:var(--accent2)">—</div>
+      <div class="lbl">ms último</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat-box">
+      <div class="val" id="reactAvg" style="font-size:1.4rem">—</div>
+      <div class="lbl">Promedio</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat-box">
+      <div class="val" id="reactBest" style="font-size:1.4rem;color:#f59e0b">—</div>
+      <div class="lbl">Mejor</div>
+    </div>
+    <div class="stat-box">
+      <div class="val" id="reactCount" style="font-size:1.4rem">0</div>
+      <div class="lbl">Intentos</div>
+    </div>
+  </div>
+
+  <div class="center" id="reactZone">
+    <div class="react-label" id="reactLabel">Toca para comenzar</div>
+    <div class="react-sub"  id="reactSub">Reacciona cuando la pantalla se ponga verde</div>
+  </div>
+
+  <div class="right-panel">
+    <button class="back-btn" onclick="goMenu()">✕</button>
+    <div class="history-mini" id="reactHistory"></div>
+    <div style="height:32px"></div>
+  </div>
+</div>
+
+<script>
+// ══ UTILITIES ══════════════════════════════════════════
+function $(id) { return document.getElementById(id); }
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+function goMenu() {
+  clearInterval(tapInterval);
+  clearTimeout(reactTimeout);
+  tapRunning = false;
+  reactState = 'idle';
+  showScreen('menu');
+}
+
+function rippleAt(el, e) {
+  const r = document.createElement('span');
+  r.className = 'ripple';
+  const rect = el.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+  const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+  const size = Math.max(rect.width, rect.height);
+  r.style.cssText = `width:${size}px;height:${size}px;left:${x - size/2}px;top:${y - size/2}px`;
+  el.appendChild(r);
+  r.addEventListener('animationend', () => r.remove());
+}
+
+// ══ TAP SPEED ══════════════════════════════════════════
+let tapRunning = false, tapCount = 0, tapInterval = null;
+let tapDuration = 10, tapRemaining = 10;
+let tapHistory = [];
+let tapBestVal = parseFloat(localStorage.getItem('tapBest') || '0');
+
+function startTap() {
+  showScreen('tapScreen');
+  renderTapBest();
+  resetTap();
+}
+
+function resetTap() {
+  clearInterval(tapInterval);
+  tapRunning = false;
+  tapCount = 0;
+  tapRemaining = tapDuration;
+  $('tapCount').textContent = '0';
+  $('tapTimer').textContent = tapDuration;
+  $('tapTps').textContent = '—';
+  $('tapBigNum').textContent = 'TAP';
+  $('tapSubLabel').textContent = 'Toca aquí para empezar';
+  $('timerBar').style.width = '100%';
+  $('tapResult').classList.remove('show');
+}
+
+function renderTapBest() {
+  if (tapBestVal > 0) {
+    $('tapBestBox').style.display = '';
+    $('tapBest').textContent = tapBestVal.toFixed(1);
+  }
+}
+
+$('tapZone').addEventListener('pointerdown', function(e) {
+  if ($('tapResult').classList.contains('show')) return;
+  rippleAt(this, e);
+
+  if (!tapRunning) {
+    tapRunning = true;
+    tapCount = 0;
+    tapRemaining = tapDuration;
+    $('tapSubLabel').textContent = '¡Sigue tocando!';
+    const start = Date.now();
+
+    tapInterval = setInterval(() => {
+      const elapsed = (Date.now() - start) / 1000;
+      tapRemaining = Math.max(0, tapDuration - elapsed);
+      $('tapTimer').textContent = Math.ceil(tapRemaining);
+      $('timerBar').style.width = (tapRemaining / tapDuration * 100) + '%';
+      const tps = tapCount / elapsed;
+      $('tapTps').textContent = tps.toFixed(1);
+
+      if (tapRemaining <= 0) {
+        clearInterval(tapInterval);
+        tapRunning = false;
+        showTapResult(tapCount, tps);
+      }
+    }, 100);
+  }
+
+  if (tapRunning) {
+    tapCount++;
+    $('tapCount').textContent = tapCount;
+    const bigNum = $('tapBigNum');
+    bigNum.textContent = tapCount;
+    bigNum.classList.add('pop');
+    setTimeout(() => bigNum.classList.remove('pop'), 70);
+  }
+});
+
+function showTapResult(count, tps) {
+  $('tapResultNum').textContent = count;
+  $('tapResultSub').textContent = `toques en ${tapDuration} s`;
+  $('tapResultTps').textContent = `${tps.toFixed(2)} taps/seg`;
+
+  // history dot
+  const dot = document.createElement('div');
+  dot.className = 'dot ' + (tps >= 8 ? 'good' : tps >= 5 ? 'ok' : 'bad');
+  const h = $('tapHistory');
+  if (h.children.length >= 7) h.removeChild(h.firstChild);
+  h.appendChild(dot);
+
+  // best
+  if (tps > tapBestVal) {
+    tapBestVal = tps;
+    localStorage.setItem('tapBest', tps);
+    renderTapBest();
+  }
+  $('tapResult').classList.add('show');
+}
+
+// ══ REACTION ═══════════════════════════════════════════
+let reactState = 'idle'; // idle | waiting | go | tooEarly
+let reactTimeout = null;
+let reactGo = 0;
+let reactTimes = [];
+let reactBestVal = parseFloat(localStorage.getItem('reactBest') || '9999');
+
+function startReact() {
+  showScreen('reactScreen');
+  reactState = 'idle';
+  renderReactStats();
+  setReactUI('idle', 'Toca para comenzar', 'Reacciona cuando la pantalla se ponga verde');
+}
+
+function setReactUI(state, label, sub) {
+  const zone = $('reactZone');
+  zone.className = 'center ' + state;
+  $('reactLabel').textContent = label;
+  $('reactSub').textContent = sub || '';
+}
+
+function renderReactStats() {
+  if (reactTimes.length === 0) return;
+  const last = reactTimes[reactTimes.length - 1];
+  const avg  = reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length;
+  const best = Math.min(...reactTimes);
+  $('reactLast').textContent  = last;
+  $('reactAvg').textContent   = Math.round(avg);
+  $('reactBest').textContent  = best;
+  $('reactCount').textContent = reactTimes.length;
+}
+
+$('reactZone').addEventListener('pointerdown', function(e) {
+  rippleAt(this, e);
+
+  if (reactState === 'idle') {
+    reactState = 'waiting';
+    const delay = 1500 + Math.random() * 3000;
+    setReactUI('waiting', 'Espera...', 'No toques aún');
+    reactTimeout = setTimeout(() => {
+      reactState = 'go';
+      reactGo = performance.now();
+      setReactUI('go', '¡TOCA!', '');
+    }, delay);
+
+  } else if (reactState === 'waiting') {
+    // too early
+    clearTimeout(reactTimeout);
+    reactState = 'idle';
+    setReactUI('too-early', '¡Muy pronto! 😅', 'Espera el verde · Toca para reintentar');
+
+  } else if (reactState === 'go') {
+    const ms = Math.round(performance.now() - reactGo);
+    reactState = 'idle';
+    reactTimes.push(ms);
+    renderReactStats();
+
+    // history dot
+    const dot = document.createElement('div');
+    dot.className = 'dot ' + (ms < 200 ? 'good' : ms < 300 ? 'ok' : 'bad');
+    const h = $('reactHistory');
+    if (h.children.length >= 7) h.removeChild(h.firstChild);
+    h.appendChild(dot);
+
+    // best
+    if (ms < reactBestVal) {
+      reactBestVal = ms;
+      localStorage.setItem('reactBest', ms);
+    }
+
+    const rank = ms < 200 ? '⚡ Excelente' : ms < 250 ? '✅ Muy bien' : ms < 350 ? '👍 Normal' : '🐢 Lento';
+    setReactUI('idle', `${ms} ms`, `${rank} · Toca para otro intento`);
+  }
+});
+</script>
+</body>
+</html>

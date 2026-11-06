@@ -153,14 +153,18 @@ function actualizarTitulosMenu() {
     cerrarGrupo();
 }
 
-const TEMA_DEFECTO_USUARIO = { primary:'#00f0ff', secondary:'#b0b5c0' };
+const TEMA_DEFECTO_USUARIO = { primary:'#ffffff', secondary:'#a1a1a6' };
+const TEMAS_LEGADO = ['#00f0ff', '#0ff', '#00ffff'];
 function claveTemaUsuario() { return `pumasDevLab.temaUsuario.${Auth.usuario?.id || Auth.usuario?.usuario || 'anon'}`; }
 function leerTemaUsuario() {
     try {
         const saved = JSON.parse(localStorage.getItem(claveTemaUsuario()) || '{}');
+        const primary = /^#[\da-f]{6}$/i.test(saved.primary || '') ? saved.primary : TEMA_DEFECTO_USUARIO.primary;
+        const secondary = /^#[\da-f]{6}$/i.test(saved.secondary || '') ? saved.secondary : TEMA_DEFECTO_USUARIO.secondary;
+        // Migrate old cyan default to new white default
         return {
-            primary:/^#[\da-f]{6}$/i.test(saved.primary || '') ? saved.primary : TEMA_DEFECTO_USUARIO.primary,
-            secondary:/^#[\da-f]{6}$/i.test(saved.secondary || '') ? saved.secondary : TEMA_DEFECTO_USUARIO.secondary
+            primary: TEMAS_LEGADO.includes(primary.toLowerCase()) ? TEMA_DEFECTO_USUARIO.primary : primary,
+            secondary
         };
     } catch (_) { return { ...TEMA_DEFECTO_USUARIO }; }
 }
