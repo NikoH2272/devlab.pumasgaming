@@ -1726,8 +1726,7 @@ async function exportarPartidasCSV() {
 async function importarPartidasCSV(archivo) {
     if (!archivo) return;
 
-    // Parsea una línea CSV con separador ; respetando campos entre comillas
-    function parsearLinea(linea, sep = ';') {
+    function parsearLinea(linea, sep) {
         const campos = []; let campo = '', enComillas = false;
         for (let i = 0; i < linea.length; i++) {
             const c = linea[i];
@@ -1742,62 +1741,89 @@ async function importarPartidasCSV(archivo) {
         return campos;
     }
 
+    // Mapa de alias de columnas → nombre interno
+    const ALIAS = {
+        partida_id: ['partida_id', 'partida'],
+        mapa:       ['mapa'],
+        top:        ['top'],
+        jugador:    ['jugador'],
+        k:          ['K', 'kills'],
+        d:          ['D', 'muertes'],
+        a:          ['A', 'asistencias'],
+        dmg:        ['DMG', 'dano'],
+        danoReal:   ['dano_real'],
+        noquear:    ['noquear', 'noqueos'],
+        curar:      ['curar', 'curacion'],
+        levantar:   ['ayudar_a_levantarse'],
+        resurreccion: ['resurreccion', 'resurrecciones'],
+        hs:         ['HS_pct'],
+        observaciones: ['observaciones'],
+    };
+
     const texto = await archivo.text();
     const lineas = texto.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
     if (lineas.length < 2) { toast('El archivo está vacío o no tiene datos.', 'error'); return; }
 
-    const cab = parsearLinea(lineas[0]).map(c => c.trim());
+    // Detectar separador automáticamente
+    const sep = lineas[0].includes(';') ? ';' : ',';
+
+    const cabecera = parsearLinea(lineas[0], sep).map(c => c.trim());
+
+    // Construir mapa cabecera → campo interno
+    const col = {};
+    for (const [campo, aliases] of Object.entries(ALIAS)) {
+        const encontrado = aliases.find(a => cabecera.includes(a));
+        if (encontrado) col[campo] = encontrado;
+    }
+
+    const campoId = col.partida_id;
+    if (!campoId) { toast('El CSV no tiene columna de ID de partida (partida_id o partida).', 'error'); return; }
+
     const filas = lineas.slice(1).map(l => {
-        const cols = parsearLinea(l);
+        const cols = parsearLinea(l, sep);
         const obj = {};
-        cab.forEach((c, i) => { obj[c] = (cols[i] ?? '').trim(); });
+        cabecera.forEach((c, i) => { obj[c] = (cols[i] ?? '').trim(); });
         return obj;
-    }).filter(f => f.partida_id);
+    }).filter(f => f[campoId]);
 
     if (!filas.length) { toast('No se encontraron filas válidas.', 'error'); return; }
 
     const jugadores = await DB.jugadores();
     const porNick = new Map(jugadores.map(j => [j.nick.toLowerCase(), j]));
 
-    // Agrupar por partida_id
     const grupos = new Map();
     for (const f of filas) {
-        if (!grupos.has(f.partida_id)) grupos.set(f.partida_id, []);
-        grupos.get(f.partida_id).push(f);
+        const pid = f[campoId];
+        if (!grupos.has(pid)) grupos.set(pid, []);
+        grupos.get(pid).push(f);
     }
 
+    const num = c => { const v = col[c] ? +filas[0][col[c]] : NaN; return isNaN(v) ? 0 : v; };
     let creadas = 0;
     const errores = [];
 
     for (const [pid, rows] of grupos) {
         try {
-            // Inferir teamId del primer jugador reconocido
             let teamId = null;
             for (const r of rows) {
-                const jug = porNick.get(r.jugador?.toLowerCase());
+                const jug = porNick.get(r[col.jugador || 'jugador']?.toLowerCase());
                 if (jug) { teamId = jug.teamId; break; }
             }
             if (!teamId) { errores.push(`${pid}: ningún jugador reconocido`); continue; }
 
             const primera = rows[0];
-
-            // top: acepta "TOP 1", "1", etc.
-            const posicion = parseInt(String(primera.top || '').replace(/\D/g, '')) || 1;
-
-            // mapa: normalizar a nombre del catálogo (case-insensitive, maneja NEXTERA→Nexterra)
-            const mapaRaw = String(primera.mapa || '').trim().toLowerCase();
+            const posicion = parseInt(String(primera[col.top || 'top'] || '').replace(/\D/g, '')) || 1;
+            const mapaRaw = String(primera[col.mapa || 'mapa'] || '').trim().toLowerCase();
             const mapa = CATALOGO.mapas.find(m => m.toLowerCase() === mapaRaw)
                 || CATALOGO.mapas.find(m => m.toLowerCase().startsWith(mapaRaw.slice(0, 5)))
                 || 'Bermuda';
 
-            const evento = 'entreno';
-
             const stats = rows.flatMap(r => {
-                const jug = porNick.get(r.jugador?.toLowerCase());
+                const jug = porNick.get(r[col.jugador || 'jugador']?.toLowerCase());
                 if (!jug) return [];
-                // HS_pct puede venir con "%" → parseFloat lo ignora correctamente
-                const hs = parseFloat(String(r.HS_pct || '').replace('%', '')) || 0;
-                return [{ playerId: jug.id, k: +r.K || 0, d: +r.D || 0, a: +r.A || 0, dmg: +r.DMG || 0, danoReal: +r.dano_real || 0, noqueos: +r.noquear || 0, curacion: +r.curar || 0, levantar: +r.ayudar_a_levantarse || 0, resurreccion: +r.resurreccion || 0, hs }];
+                const g = c => col[c] ? +(r[col[c]]) || 0 : 0;
+                const hs = parseFloat(String(col.hs ? r[col.hs] : '').replace('%', '')) || 0;
+                return [{ playerId: jug.id, k: g('k'), d: g('d'), a: g('a'), dmg: g('dmg'), danoReal: g('danoReal'), noqueos: g('noquear'), curacion: g('curar'), levantar: g('levantar'), resurreccion: g('resurreccion'), hs }];
             });
 
             if (!stats.length) { errores.push(`${pid}: sin jugadores válidos`); continue; }
@@ -1806,12 +1832,9 @@ async function importarPartidasCSV(archivo) {
                 teamId,
                 fecha: fechaLocal(new Date()),
                 hora: new Date().toTimeString().slice(0, 5),
-                mapa,
-                evento,
-                posicion,
-                totalEquipos: 12,
+                mapa, evento: 'entreno', posicion, totalEquipos: Math.max(12, posicion),
                 primerDerribo: null, primeraCaida: null, caida: null,
-                notas: primera.observaciones || null,
+                notas: col.observaciones ? primera[col.observaciones] || null : null,
                 creadoPor: Auth.usuario.id,
                 stats
             });
