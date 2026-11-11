@@ -1720,6 +1720,112 @@ async function exportarPartidasCSV() {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
 }
 
+// ============================================================
+// Importar partidas desde CSV de análisis (separado por ;)
+// ============================================================
+async function importarPartidasCSV(archivo) {
+    if (!archivo) return;
+
+    // Parsea una línea CSV con separador ; respetando campos entre comillas
+    function parsearLinea(linea, sep = ';') {
+        const campos = []; let campo = '', enComillas = false;
+        for (let i = 0; i < linea.length; i++) {
+            const c = linea[i];
+            if (enComillas) {
+                if (c === '"') { if (linea[i + 1] === '"') { campo += '"'; i++; } else enComillas = false; }
+                else campo += c;
+            } else if (c === '"') enComillas = true;
+            else if (c === sep) { campos.push(campo); campo = ''; }
+            else campo += c;
+        }
+        campos.push(campo);
+        return campos;
+    }
+
+    const texto = await archivo.text();
+    const lineas = texto.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
+    if (lineas.length < 2) { toast('El archivo está vacío o no tiene datos.', 'error'); return; }
+
+    const cab = parsearLinea(lineas[0]).map(c => c.trim());
+    const filas = lineas.slice(1).map(l => {
+        const cols = parsearLinea(l);
+        const obj = {};
+        cab.forEach((c, i) => { obj[c] = (cols[i] ?? '').trim(); });
+        return obj;
+    }).filter(f => f.partida_id);
+
+    if (!filas.length) { toast('No se encontraron filas válidas.', 'error'); return; }
+
+    const jugadores = await DB.jugadores();
+    const porNick = new Map(jugadores.map(j => [j.nick.toLowerCase(), j]));
+
+    // Agrupar por partida_id
+    const grupos = new Map();
+    for (const f of filas) {
+        if (!grupos.has(f.partida_id)) grupos.set(f.partida_id, []);
+        grupos.get(f.partida_id).push(f);
+    }
+
+    let creadas = 0;
+    const errores = [];
+
+    for (const [pid, rows] of grupos) {
+        try {
+            // Inferir teamId del primer jugador reconocido
+            let teamId = null;
+            for (const r of rows) {
+                const jug = porNick.get(r.jugador?.toLowerCase());
+                if (jug) { teamId = jug.teamId; break; }
+            }
+            if (!teamId) { errores.push(`${pid}: ningún jugador reconocido`); continue; }
+
+            const primera = rows[0];
+
+            // top: acepta "TOP 1", "1", etc.
+            const posicion = parseInt(String(primera.top || '').replace(/\D/g, '')) || 1;
+
+            // mapa: normalizar a nombre del catálogo (case-insensitive, maneja NEXTERA→Nexterra)
+            const mapaRaw = String(primera.mapa || '').trim().toLowerCase();
+            const mapa = CATALOGO.mapas.find(m => m.toLowerCase() === mapaRaw)
+                || CATALOGO.mapas.find(m => m.toLowerCase().startsWith(mapaRaw.slice(0, 5)))
+                || 'Bermuda';
+
+            const evento = 'entreno';
+
+            const stats = rows.flatMap(r => {
+                const jug = porNick.get(r.jugador?.toLowerCase());
+                if (!jug) return [];
+                // HS_pct puede venir con "%" → parseFloat lo ignora correctamente
+                const hs = parseFloat(String(r.HS_pct || '').replace('%', '')) || 0;
+                return [{ playerId: jug.id, k: +r.K || 0, d: +r.D || 0, a: +r.A || 0, dmg: +r.DMG || 0, danoReal: +r.dano_real || 0, noqueos: +r.noquear || 0, curacion: +r.curar || 0, levantar: +r.ayudar_a_levantarse || 0, resurreccion: +r.resurreccion || 0, hs }];
+            });
+
+            if (!stats.length) { errores.push(`${pid}: sin jugadores válidos`); continue; }
+
+            await DB.crearPartida({
+                teamId,
+                fecha: fechaLocal(new Date()),
+                hora: new Date().toTimeString().slice(0, 5),
+                mapa,
+                evento,
+                posicion,
+                totalEquipos: 12,
+                primerDerribo: null, primeraCaida: null, caida: null,
+                notas: primera.observaciones || null,
+                creadoPor: Auth.usuario.id,
+                stats
+            });
+            creadas++;
+        } catch (err) {
+            errores.push(`${pid}: ${err.message}`);
+        }
+    }
+
+    const msg = `Importadas: ${creadas} partida(s).${errores.length ? '\n\nErrores:\n' + errores.join('\n') : ''}`;
+    toast(creadas ? msg : errores[0] || 'Sin cambios.', creadas ? 'ok' : 'error');
+    if (creadas) renderPartidasRecientes();
+}
+
 window.addEventListener('DOMContentLoaded', () => {
     try {
         if (localStorage.getItem('pumasDevLab.menuColapsado')) document.body.classList.add('sb-colapsado');

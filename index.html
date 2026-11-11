@@ -817,9 +817,15 @@
 
         <h3 class="card-titulo" style="margin-top: 30px;"><i class="fa-solid fa-clock-rotate-left"></i> Partidas recientes</h3>
         <div id="lista-partidas"></div>
-        <button type="button" class="btn-sec" style="margin-top: 12px;" onclick="exportarPartidasCSV()">
-            <i class="fa-solid fa-file-csv"></i> Exportar partidas CSV
-        </button>
+        <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+            <button type="button" class="btn-sec" onclick="exportarPartidasCSV()">
+                <i class="fa-solid fa-file-csv"></i> Exportar partidas CSV
+            </button>
+            <label class="btn-sec" style="cursor:pointer;" title="Importar partidas desde CSV">
+                <i class="fa-solid fa-file-import"></i> Importar partidas CSV
+                <input type="file" accept=".csv" hidden onchange="importarPartidasCSV(this.files[0]); this.value=''">
+            </label>
+        </div>
     </div>
 </section>
 
