@@ -1662,6 +1662,62 @@ async function exportarDatos() {
     URL.revokeObjectURL(a.href);
 }
 
+// ============================================================
+// Exportar partidas como CSV de análisis (separado por ;)
+// Formato: partida_id;mapa;top;jugador;K;D;A;DMG;dano_real;
+//          noquear;curar;ayudar_a_levantarse;resurreccion;
+//          HS_pct;fuente_estadistica;observaciones
+// ============================================================
+async function exportarPartidasCSV() {
+    const equipos = await Auth.equiposVisibles();
+    if (!equipos.length) { alert('No hay rosters visibles.'); return; }
+
+    const [jugadores, partidas] = await Promise.all([
+        DB.jugadores(),
+        DB.partidas(equipos.map(t => t.id))
+    ]);
+
+    const nickPor = new Map(jugadores.map(j => [j.id, j.nick]));
+    const cel = v => {
+        const s = String(v ?? '');
+        return s.includes(';') || s.includes('"') || s.includes('\n')
+            ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const CABECERA = 'partida_id;mapa;top;jugador;K;D;A;DMG;dano_real;noquear;curar;ayudar_a_levantarse;resurreccion;HS_pct;fuente_estadistica;observaciones';
+    const filas = [CABECERA];
+    for (const p of partidas) {
+        for (const s of p.stats) {
+            filas.push([
+                cel(p.id),
+                cel(p.mapa),
+                cel(p.posicion ?? ''),
+                cel(nickPor.get(s.playerId) || s.playerId),
+                cel(s.k ?? ''),
+                cel(s.d ?? ''),
+                cel(s.a ?? ''),
+                cel(s.dmg ?? ''),
+                cel(s.danoReal ?? ''),
+                cel(s.noqueos ?? ''),
+                cel(s.curacion ?? ''),
+                cel(s.levantar ?? ''),
+                cel(s.resurreccion ?? ''),
+                cel(s.hs ?? ''),
+                cel(p.evento || ''),
+                cel(p.notas || '')
+            ].join(';'));
+        }
+    }
+
+    const blob = new Blob(['﻿' + filas.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `partidas-pumas-${fechaLocal(new Date())}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
     try {
         if (localStorage.getItem('pumasDevLab.menuColapsado')) document.body.classList.add('sb-colapsado');
