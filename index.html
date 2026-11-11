@@ -139,9 +139,6 @@
         <button type="button" data-modulo="herramientas" onclick="exportarDatos()" title="Exportar respaldo">
             <i class="fa-solid fa-download"></i><span>Exportar respaldo</span>
         </button>
-        <button type="button" data-modulo="herramientas" onclick="exportarPartidasCSV()" title="Exportar partidas CSV">
-            <i class="fa-solid fa-file-csv"></i><span>Exportar partidas CSV</span>
-        </button>
     </div>
 
     <div class="sb-pie">
@@ -820,6 +817,9 @@
 
         <h3 class="card-titulo" style="margin-top: 30px;"><i class="fa-solid fa-clock-rotate-left"></i> Partidas recientes</h3>
         <div id="lista-partidas"></div>
+        <button type="button" class="btn-sec" style="margin-top: 12px;" onclick="exportarPartidasCSV()">
+            <i class="fa-solid fa-file-csv"></i> Exportar partidas CSV
+        </button>
     </div>
 </section>
 

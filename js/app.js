@@ -1688,11 +1688,13 @@ async function exportarPartidasCSV() {
     const filas = [CABECERA];
     for (const p of partidas) {
         for (const s of p.stats) {
+            const nick = nickPor.get(s.playerId);
+            if (!nick) continue;
             filas.push([
                 cel(p.id),
                 cel(p.mapa),
                 cel(p.posicion ?? ''),
-                cel(nickPor.get(s.playerId) || s.playerId),
+                cel(nick),
                 cel(s.k ?? ''),
                 cel(s.d ?? ''),
                 cel(s.a ?? ''),
