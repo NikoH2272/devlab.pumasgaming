@@ -1,0 +1,933 @@
+<title>Pumas Dev Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" defer></script>
+
+<style>
+/* ============================================================
+   PUMAS GAMING DEV LAB — sistema editorial deportivo
+   dark-first / single theme intencional
+   Layout: sidebar+main (app) · tarjeta centrada (login)
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+  /* palette */
+  --oro:   #DCCC9C;
+  --fondo: #141414;
+  --panel: #1D1D1D;
+  --piel:  #F2F2F2;
+  --gris:  #A5A5A5;
+  --linea: #333333;
+  --linea-s: rgba(255,255,255,.055);
+  --ok:    #6ECA8F;
+  --rojo:  #E06060;
+  /* shadows */
+  --sombra: 0 26px 50px rgba(0,0,0,.70);
+  /* type */
+  --ft: 'Barlow Condensed','Arial Narrow',sans-serif;
+  --fb: 'Inter',system-ui,sans-serif;
+}
+
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  font-family: var(--fb);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--piel);
+  background-color: var(--fondo);
+  background-image: linear-gradient(
+    19deg,
+    var(--fondo) 0%, var(--fondo) 22%,
+    #1A1A1A      22%, #1A1A1A      78%,
+    var(--fondo) 78%
+  );
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+/* Barra dorada — borde derecho */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; right: 0;
+  width: 12px; height: 100%;
+  background: var(--oro);
+  z-index: 9000;
+  pointer-events: none;
+}
+
+/* Safe-area top */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--fondo);
+  z-index: 9001;
+}
+
+/* ---- TIPOGRAFÍA BASE ---- */
+h1,h2,h3,h4 {
+  font-family: var(--ft);
+  font-weight: 800;
+  text-transform: uppercase;
+  line-height: .9;
+  letter-spacing: -.5px;
+}
+em.o { font-style: normal; color: var(--oro); }
+
+/* ---- UTILS ---- */
+.kicker {
+  font-family: var(--fb);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--oro);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.kicker::before {
+  content: '';
+  display: block;
+  width: 20px; height: 2px;
+  background: var(--oro);
+  flex-shrink: 0;
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--oro);
+  color: #141414;
+  font-family: var(--ft);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.chip-o {
+  background: transparent;
+  border: 1px solid var(--oro);
+  color: var(--oro);
+  font-family: var(--fb);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: .5px;
+}
+.chip-ok {
+  background: transparent;
+  border: 1px solid var(--ok);
+  color: var(--ok);
+  font-family: var(--fb);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: .5px;
+}
+
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+  flex-shrink: 0;
+}
+
+/* ---- BOTONES ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--ft);
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: opacity .15s, background .15s, color .15s;
+}
+.btn-p {
+  padding: 12px 20px;
+  font-size: 13px;
+  background: var(--oro);
+  color: #141414;
+}
+.btn-p:hover { opacity: .87; }
+.btn-s {
+  padding: 8px 14px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--oro);
+  color: var(--oro);
+}
+.btn-s:hover { background: var(--oro); color: #141414; }
+.btn-g {
+  padding: 8px 14px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--linea);
+  color: var(--gris);
+  font-family: var(--fb);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.btn-g:hover { color: var(--piel); border-color: rgba(255,255,255,.25); }
+
+/* ---- INPUTS ---- */
+input, textarea, select {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--fondo);
+  border: 1px solid var(--linea);
+  color: var(--piel);
+  font-family: var(--fb);
+  font-size: 14px;
+  outline: none;
+  transition: border-color .2s;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+input:focus, textarea:focus { border-color: var(--oro); }
+input::placeholder { color: rgba(255,255,255,.22); }
+.fl {
+  display: block;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--oro);
+  margin-bottom: 6px;
+}
+
+/* scrollbar */
+* { scrollbar-width: thin; scrollbar-color: #333 transparent; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-thumb { background: #333; }
+
+::selection { background: rgba(220,204,156,.22); color: var(--piel); }
+:focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; }
+
+/* =====================================================
+   LOGIN
+   ===================================================== */
+#v-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 32px;
+  padding-left:  max(16px, env(safe-area-inset-left,  0px));
+  padding-right: max(28px, calc(env(safe-area-inset-right, 0px) + 12px));
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--linea);
+  border-left: 4px solid var(--oro);
+  box-shadow: var(--sombra);
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.lmarca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--ft);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--oro);
+}
+
+.ltitle h1 {
+  font-size: clamp(2.4rem, 7vw, 3rem);
+  letter-spacing: -1px;
+  line-height: .88;
+  margin-bottom: 8px;
+  text-wrap: balance;
+}
+.ltitle p { font-size: 13px; color: var(--gris); line-height: 1.4; }
+
+.lform { display: flex; flex-direction: column; gap: 16px; }
+
+.ldiv { border: none; border-top: 1px solid var(--linea); }
+
+.lfooter { font-size: 12px; color: rgba(255,255,255,.22); text-align: center; }
+
+/* =====================================================
+   APP SHELL
+   ===================================================== */
+#v-app {
+  display: none;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.shell { display: flex; flex: 1; min-height: 0; }
+
+/* ---- SIDEBAR ---- */
+.sb {
+  width: 240px;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--linea);
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.sb-head {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--linea);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sb-head i { color: var(--oro); font-size: 1.1rem; }
+.sb-hn strong {
+  display: block;
+  font-family: var(--ft);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--piel);
+  line-height: 1;
+}
+.sb-hn small { font-size: 11px; color: rgba(255,255,255,.22); }
+
+.sb-nav {
+  flex: 1;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sb-grp {
+  font-family: var(--fb);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--oro);
+  opacity: .6;
+  padding: 14px 10px 5px;
+}
+
+.sb-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  color: rgba(255,255,255,.3);
+  font-family: var(--fb);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: color .12s, background .12s, border-color .12s;
+  white-space: nowrap;
+}
+.sb-btn i { width: 16px; text-align: center; font-size: 12px; opacity: .7; }
+.sb-btn:hover { color: rgba(255,255,255,.75); background: rgba(255,255,255,.04); }
+.sb-btn.on { color: var(--piel); background: rgba(220,204,156,.07); border-left-color: var(--oro); }
+
+.sb-foot {
+  padding: 12px;
+  border-top: 1px solid var(--linea);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sb-user strong { display: block; font-size: 13px; font-weight: 600; color: var(--piel); }
+.sb-user small  { font-size: 11px; color: var(--gris); }
+.sb-ver { font-size: 10px; color: rgba(255,255,255,.18); letter-spacing: 1px; text-transform: uppercase; }
+
+/* ---- TOPBAR ---- */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(20,20,20,.96);
+  border-bottom: 1px solid var(--linea);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px max(20px, calc(env(safe-area-inset-right, 0px) + 24px))
+           10px max(16px, env(safe-area-inset-left, 0px));
+}
+
+.mbtn {
+  display: none;
+  width: 32px; height: 32px;
+  align-items: center; justify-content: center;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--linea);
+  color: var(--gris);
+  cursor: pointer;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.t-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gris); }
+
+.t-org {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--oro);
+}
+
+.t-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.t-user  { font-size: 13px; color: var(--gris); }
+
+/* ---- MAIN ---- */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ---- HERO ---- */
+.hero {
+  padding: 40px max(20px, calc(env(safe-area-inset-right, 0px) + 24px))
+           36px max(16px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--linea);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::after {
+  content: 'PUMAS';
+  position: absolute;
+  right: -16px; bottom: -28px;
+  font-family: var(--ft);
+  font-weight: 800;
+  font-size: min(180px, 24vw);
+  color: rgba(255,255,255,.032);
+  pointer-events: none;
+  line-height: 1;
+  letter-spacing: -6px;
+  text-transform: uppercase;
+}
+
+.hero-kick { margin-bottom: 10px; }
+.hero h1 {
+  font-size: clamp(3.6rem, 8vw, 6.2rem);
+  letter-spacing: -2px;
+  line-height: .86;
+  margin-bottom: 10px;
+  text-wrap: balance;
+}
+.hero-sub {
+  font-size: 11px; letter-spacing: 4px; text-transform: uppercase;
+  color: var(--gris); font-weight: 600; margin-bottom: 28px;
+}
+
+.hero-stats { display: flex; flex-wrap: wrap; gap: 20px 36px; }
+.h-stat strong {
+  display: block;
+  font-family: var(--ft);
+  font-weight: 800;
+  font-size: 2.2rem;
+  letter-spacing: -1px;
+  line-height: 1;
+  color: var(--piel);
+  font-variant-numeric: tabular-nums;
+}
+.h-stat span {
+  font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--gris); font-weight: 600;
+}
+
+/* ---- CONTENIDO ---- */
+.ctn {
+  padding: 24px max(20px, calc(env(safe-area-inset-right, 0px) + 24px))
+           40px max(16px, env(safe-area-inset-left, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ---- KPI GRID ---- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border: 1px solid var(--linea);
+}
+.kpi-c {
+  padding: 18px 20px;
+  background: var(--panel);
+  border-right: 1px solid var(--linea);
+  position: relative;
+  overflow: hidden;
+}
+.kpi-c:last-child { border-right: none; }
+.kpi-c::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--oro);
+  transform: scaleX(0);
+  transition: transform .2s;
+}
+.kpi-c:hover::before { transform: scaleX(1); }
+.kpi-l {
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--gris); font-weight: 600; margin-bottom: 4px;
+}
+.kpi-v {
+  font-family: var(--ft);
+  font-weight: 800;
+  font-size: 2.4rem;
+  letter-spacing: -1px;
+  line-height: 1;
+  color: var(--piel);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+.kpi-d { font-size: 11px; font-weight: 600; color: var(--gris); }
+.kpi-d.up { color: var(--ok); }
+.kpi-d.dn { color: var(--rojo); }
+
+/* ---- TWO COL ---- */
+.dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 16px; }
+
+/* ---- CARD ---- */
+.card {
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,.07);
+  box-shadow: var(--sombra);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ctit {
+  font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--oro); font-weight: 700;
+  display: flex; align-items: center; gap: 7px;
+}
+
+/* Lista acciones */
+.la { display: flex; flex-direction: column; gap: 4px; }
+.li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--oro);
+  background: rgba(255,255,255,.03);
+  font-size: 13px; color: var(--piel);
+  cursor: pointer;
+  transition: background .12s;
+}
+.li:hover { background: rgba(255,255,255,.06); }
+.li i { color: var(--oro); font-size: 11px; flex-shrink: 0; }
+
+/* Status list */
+.sl { display: flex; flex-direction: column; }
+.sr {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--linea-s);
+  font-size: 13px; gap: 10px;
+}
+.sr:last-child { border-bottom: none; }
+.sr span  { color: var(--gris); flex-shrink: 0; }
+.sr strong { color: var(--piel); font-weight: 600; text-align: right; }
+.sr em    { font-style: normal; color: var(--oro); font-weight: 700; }
+
+/* ---- SECTION HEAD ---- */
+.sh {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 12px; flex-wrap: wrap;
+}
+.stit {
+  font-family: var(--ft);
+  font-weight: 800; font-size: 1.8rem;
+  text-transform: uppercase;
+  letter-spacing: -1px; line-height: .9;
+  color: var(--piel);
+  text-wrap: balance;
+}
+
+/* ---- TABLE ---- */
+.tw { overflow-x: auto; min-width: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead tr { border-bottom: 2px solid var(--oro); }
+th {
+  font-family: var(--ft);
+  font-weight: 800; font-size: 11px;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--oro); padding: 8px 12px;
+  text-align: left; white-space: nowrap;
+}
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--linea);
+  color: var(--piel); vertical-align: middle;
+}
+tbody tr:hover td { background: rgba(255,255,255,.025); }
+td small { color: var(--gris); font-size: 11px; display: block; }
+
+.bw { display: flex; align-items: center; gap: 8px; min-width: 90px; }
+.bt { flex: 1; height: 3px; background: var(--linea); }
+.bf { height: 100%; background: var(--oro); }
+.bn { font-size: 11px; font-weight: 700; min-width: 24px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- BLOCS DE DATOS ---- */
+.bg { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; }
+.bd {
+  border-top: 3px solid var(--oro);
+  border: 1px solid rgba(255,255,255,.07);
+  border-top: 3px solid var(--oro);
+  background: var(--panel);
+  padding: 16px;
+}
+.bd h4 {
+  font-family: var(--ft);
+  font-weight: 800; font-size: 1rem;
+  text-transform: uppercase; line-height: 1;
+  color: var(--piel); margin-bottom: 6px; letter-spacing: 0;
+}
+.bd p { font-size: 12px; color: var(--gris); line-height: 1.4; }
+
+/* ---- FOOTER ---- */
+footer {
+  border-top: 2px solid var(--linea);
+  padding: 18px max(20px, calc(env(safe-area-inset-right, 0px) + 24px))
+           18px max(16px, env(safe-area-inset-left, 0px));
+  color: var(--gris); font-size: 13px;
+  display: flex; justify-content: space-between;
+  align-items: center; flex-wrap: wrap; gap: 8px;
+}
+footer strong { color: var(--piel); }
+footer a { color: var(--gris); text-decoration: none; }
+footer a:hover { color: var(--piel); }
+
+/* ---- OVERLAY MOBILE ---- */
+.ov { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 90; }
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 768px) {
+  .mbtn { display: flex; }
+  .sb {
+    position: fixed; top: 0; left: 0;
+    transform: translateX(-100%);
+    transition: transform .22s cubic-bezier(.2,.8,.2,1);
+    z-index: 200; height: 100%;
+  }
+  .sb.open { transform: translateX(0); }
+  .ov.open { display: block; }
+  .hero h1 { font-size: 3rem; letter-spacing: -1px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-c { border-right: none; border-bottom: 1px solid var(--linea); }
+  .kpi-c:nth-child(odd) { border-right: 1px solid var(--linea); }
+  .kpi-c:last-child { border-bottom: none; }
+  footer { flex-direction: column; gap: 4px; text-align: center; }
+  .hero-stats { gap: 14px 24px; }
+  .hero h1 { font-size: 3.2rem; }
+  .login-card { padding: 28px 22px; }
+}
+
+@media print { body::after { display: none; } }
+</style>
+
+<!-- VIEW: LOGIN -->
+<div id="v-login">
+  <div class="login-card">
+    <div class="lmarca">
+      <i class="fa-solid fa-terminal"></i>
+      PUMAS DEV LAB
+    </div>
+    <div class="ltitle">
+      <h1>Iniciar <em class="o">sesión</em></h1>
+      <p>Centro de desarrollo y analítica competitiva para Pumas Gaming.</p>
+    </div>
+    <form class="lform" id="lf" onsubmit="goApp(event)">
+      <div>
+        <label class="fl" for="inp-u">Usuario</label>
+        <input id="inp-u" type="text" placeholder="tu_usuario" value="coach.niko" autocomplete="username">
+      </div>
+      <div>
+        <label class="fl" for="inp-p">Contraseña</label>
+        <input id="inp-p" type="password" value="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn btn-p" type="submit" style="width:100%;margin-top:4px">
+        <i class="fa-solid fa-right-to-bracket"></i> Entrar
+      </button>
+    </form>
+    <hr class="ldiv">
+    <p class="lfooter">Pumas Gaming · Free Fire · Temporada 2026</p>
+  </div>
+</div>
+
+<!-- VIEW: APP -->
+<div id="v-app">
+  <div class="shell">
+
+    <!-- Overlay mobile -->
+    <div class="ov" id="ov" onclick="closeSb()"></div>
+
+    <!-- Sidebar -->
+    <aside class="sb" id="sb">
+      <div class="sb-head">
+        <i class="fa-solid fa-terminal"></i>
+        <div class="sb-hn">
+          <strong>Pumas Dev Lab</strong>
+          <small>/ Alto rendimiento</small>
+        </div>
+      </div>
+      <nav class="sb-nav">
+        <button class="sb-btn on"  onclick="nav(this)"><i class="fa-solid fa-house"></i> Inicio</button>
+        <div class="sb-grp">Equipo</div>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-chart-column"></i> Visión del equipo</button>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-people-group"></i> Jugadores</button>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-parachute-box"></i> Caídas</button>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-gamepad"></i> Partidas</button>
+        <div class="sb-grp">Estrategia</div>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-map-location-dot"></i> Mapas</button>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-crosshairs"></i> Mapeador</button>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-film"></i> MapStream</button>
+        <div class="sb-grp">Análisis</div>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-chart-line"></i> Rendimiento</button>
+        <button class="sb-btn" onclick="nav(this)"><i class="fa-solid fa-table-list"></i> Estadísticas CSV</button>
+      </nav>
+      <div class="sb-foot">
+        <div class="sb-user">
+          <strong>Coach Niko</strong>
+          <small>COACH · Pumas Gaming</small>
+        </div>
+        <button class="sb-btn" style="color:rgba(255,255,255,.28);font-size:12px;padding:6px 10px">
+          <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
+        </button>
+        <div class="sb-ver">Dev Lab Beta · v4.5.1</div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main">
+
+      <!-- Topbar -->
+      <header class="topbar">
+        <button class="mbtn" onclick="openSb()"><i class="fa-solid fa-bars"></i></button>
+        <div class="t-status">
+          <div class="dot"></div>
+          <span>Supabase</span>
+        </div>
+        <div class="t-org">Pumas Gaming</div>
+        <div class="t-right">
+          <span class="t-user">Coach Niko</span>
+          <span class="chip">Coach</span>
+        </div>
+      </header>
+
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero-kick kicker">
+          <i class="fa-solid fa-paw"></i> Free Fire · Temporada 2026
+        </div>
+        <h1>Dev <em class="o">Lab</em></h1>
+        <p class="hero-sub">Centro de desarrollo competitivo</p>
+        <div class="hero-stats">
+          <div class="h-stat">
+            <strong><em class="o">12</em></strong>
+            <span>Partidas reg.</span>
+          </div>
+          <div class="h-stat">
+            <strong>4</strong>
+            <span>Jugadores</span>
+          </div>
+          <div class="h-stat">
+            <strong>3</strong>
+            <span>Mapas</span>
+          </div>
+          <div class="h-stat">
+            <strong><em class="o">#4</em></strong>
+            <span>Pos. promedio</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Contenido -->
+      <div class="ctn">
+
+        <!-- KPIs -->
+        <div class="kpi-grid">
+          <div class="kpi-c">
+            <div class="kpi-l">Kills prom.</div>
+            <div class="kpi-v"><em class="o">8.4</em></div>
+            <div class="kpi-d up">↑ +1.2 vs anterior</div>
+          </div>
+          <div class="kpi-c">
+            <div class="kpi-l">Daño promedio</div>
+            <div class="kpi-v">1,240</div>
+            <div class="kpi-d up">↑ +180</div>
+          </div>
+          <div class="kpi-c">
+            <div class="kpi-l">Posición prom.</div>
+            <div class="kpi-v">4.1</div>
+            <div class="kpi-d dn">↓ −0.3</div>
+          </div>
+          <div class="kpi-c">
+            <div class="kpi-l">Top 3 rate</div>
+            <div class="kpi-v"><em class="o">58%</em></div>
+            <div class="kpi-d up">↑ +6%</div>
+          </div>
+        </div>
+
+        <!-- Two-col cards -->
+        <div class="dos">
+          <div class="card">
+            <div class="ctit"><i class="fa-solid fa-list-check"></i> Siguientes pasos</div>
+            <div class="la">
+              <div class="li"><i class="fa-solid fa-parachute-box"></i> Registrar caídas de Bermuda</div>
+              <div class="li"><i class="fa-solid fa-gamepad"></i> Cargar partidas de la semana</div>
+              <div class="li"><i class="fa-solid fa-chart-column"></i> Revisar informe de rendimiento</div>
+              <div class="li"><i class="fa-solid fa-film"></i> Analizar MapStream jornada 3</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="ctit"><i class="fa-solid fa-server"></i> Estado del sistema</div>
+            <div class="sl">
+              <div class="sr"><span>Base de datos</span><em>Supabase · En línea</em></div>
+              <div class="sr"><span>Logs procesados</span><strong>3 archivos</strong></div>
+              <div class="sr"><span>Organización</span><strong>Pumas Gaming</strong></div>
+              <div class="sr"><span>Acceso</span><span class="chip" style="font-size:10px">Coach</span></div>
+              <div class="sr"><span>Versión</span><strong>v4.5.1</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla jugadores -->
+        <div>
+          <div class="sh" style="margin-bottom:14px">
+            <div class="stit">Jugadores <em class="o">activos</em></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-s"><i class="fa-solid fa-plus"></i> Nueva partida</button>
+              <button class="btn btn-g"><i class="fa-solid fa-filter"></i> Filtrar</button>
+            </div>
+          </div>
+          <div class="tw">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>Jugador</th><th>Rol</th>
+                  <th>K/D</th><th>Daño prom.</th><th>Top 3</th>
+                  <th>Desempeño</th><th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td><strong>Killua</strong><small>Rusher · IGL</small></td>
+                  <td><span class="chip" style="font-size:10px">Rusher</span></td>
+                  <td><strong>3.4</strong></td><td>1,480</td><td>65%</td>
+                  <td><div class="bw"><div class="bt"><div class="bf" style="width:82%"></div></div><div class="bn">82</div></div></td>
+                  <td><span class="chip chip-ok">Activo</span></td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td><strong>Zamas</strong><small>Sniper</small></td>
+                  <td><span class="chip chip-o">Sniper</span></td>
+                  <td><strong>2.8</strong></td><td>1,210</td><td>58%</td>
+                  <td><div class="bw"><div class="bt"><div class="bf" style="width:70%"></div></div><div class="bn">70</div></div></td>
+                  <td><span class="chip chip-ok">Activo</span></td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td><strong>Pinocho</strong><small>Support</small></td>
+                  <td><span class="chip chip-o">Support</span></td>
+                  <td><strong>1.9</strong></td><td>980</td><td>62%</td>
+                  <td><div class="bw"><div class="bt"><div class="bf" style="width:65%"></div></div><div class="bn">65</div></div></td>
+                  <td><span class="chip chip-ok">Activo</span></td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td><strong>Gxrciia</strong><small>Fragger</small></td>
+                  <td><span class="chip chip-o">Fragger</span></td>
+                  <td><strong>2.2</strong></td><td>1,100</td><td>50%</td>
+                  <td><div class="bw"><div class="bt"><div class="bf" style="width:58%"></div></div><div class="bn">58</div></div></td>
+                  <td><span class="chip chip-ok">Activo</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Blocs de análisis -->
+        <div>
+          <div class="stit" style="margin-bottom:14px">Módulos de <em class="o">análisis</em></div>
+          <div class="bg">
+            <div class="bd">
+              <h4>MapStream</h4>
+              <p>Repetición de partidas sobre el mapa: rotaciones, zona y bajas segundo a segundo.</p>
+            </div>
+            <div class="bd">
+              <h4>Estadísticas CSV</h4>
+              <p>Carga los CSV oficiales o genera desde replay (.bin + .json).</p>
+            </div>
+            <div class="bd">
+              <h4>Rendimiento</h4>
+              <p>KPIs por jugador, map trends y diagnóstico de puntos débiles del equipo.</p>
+            </div>
+            <div class="bd">
+              <h4>Mapeador de caídas</h4>
+              <p>Planos de caídas, rotaciones y análisis por cuadrante del mapa.</p>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /ctn -->
+
+      <footer>
+        <span>&copy; 2026 <strong>PUMAS GAMING DEV LAB</strong>. Todos los derechos reservados.</span>
+        <a href="https://www.instagram.com/coach.nikoh/" target="_blank"><i class="fa-brands fa-instagram"></i> @coach.nikoh</a>
+      </footer>
+    </div><!-- /main -->
+  </div><!-- /shell -->
+</div><!-- /v-app -->
+
+<script>
+function goApp(e) {
+  if (e) e.preventDefault();
+  document.getElementById('v-login').hidden = true;
+  const app = document.getElementById('v-app');
+  app.hidden = false;
+  app.style.display = 'flex';
+}
+
+function openSb() {
+  document.getElementById('sb').classList.add('open');
+  document.getElementById('ov').classList.add('open');
+}
+
+function closeSb() {
+  document.getElementById('sb').classList.remove('open');
+  document.getElementById('ov').classList.remove('open');
+}
+
+function nav(btn) {
+  document.querySelectorAll('.sb-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  if (window.innerWidth < 768) closeSb();
+}
+</script>
