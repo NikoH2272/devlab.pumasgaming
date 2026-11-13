@@ -1,10 +1,15 @@
 :root {
-    --primary: #ffffff;
-    --secondary: #a1a1a6;
-    --dark: #000000;
-    --dark-card: #0d0d10;
-    --light: #ffffff;
-    --gray: #66666b;
+    --oro: #DCCC9C;
+    --fondo: #141414;
+    --panel: #1D1D1D;
+    --piel: #F2F2F2;
+    --gris: #A5A5A5;
+    --primary: #DCCC9C;
+    --secondary: #A5A5A5;
+    --dark: #141414;
+    --dark-card: #1D1D1D;
+    --light: #F2F2F2;
+    --gray: #A5A5A5;
 }
 
 * {
@@ -13,6 +18,9 @@
     box-sizing: border-box;
     font-family: 'Inter', 'Rajdhani', sans-serif;
 }
+
+/* Native select dropdown options — dark background so text is visible */
+select option { background: #111115; color: #ffffff; }
 
 body {
     background-color: var(--dark);
@@ -413,7 +421,7 @@ footer a:hover, .creador a:hover { color: rgba(255, 255, 255, 0.90); border-bott
     --serie-6: #9085e9;
     --ok: #0ca30c;
     --alerta: #eda100;
-    --linea: rgba(255, 255, 255, 0.07);
+    --linea: #333333;
 }
 
 [hidden] { display: none !important; }
@@ -1142,6 +1150,213 @@ body.cal-monedas-abierto { overflow: hidden; }
     .tb-mapa { order: -1; height: 60vh; }
     .tb-panel { border-right: none; }
 }
+
+/* ============================================================
+   MAPSTREAM: layout de visor
+   ============================================================ */
+.ms-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; height: calc(100vh - 50px); overflow: hidden; }
+.ms-escena { display: flex; flex-direction: column; overflow: hidden; min-width: 0; background: #04050a; }
+.ms-lienzo { flex: 1; position: relative; min-height: 0; overflow: hidden; background: #04050a; }
+.ms-lienzo canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+/* Tabs de análisis */
+.ms-tabs-bar { display: flex; gap: 2px; padding: 7px 10px; background: rgba(0,0,0,0.92); border-bottom: 1px solid rgba(255,255,255,0.07); flex-shrink: 0; }
+.ms-tab { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); color: rgba(255,255,255,0.4); border-radius: 6px; cursor: pointer; font-size: 0.78rem; white-space: nowrap; transition: background 0.12s, color 0.12s; }
+.ms-tab:hover { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.07); }
+.ms-tab.activo { color: #fff; background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.22); }
+
+/* Modos de contenido */
+#ms-modo-replay, #ms-modo-calor { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+#ms-modo-zona, #ms-modo-stats { flex: 1; overflow-y: auto; }
+
+/* Zona: stats por fase */
+.ms-zona-cont { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.ms-zona-fase { padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; }
+.ms-zona-cabeza { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+.ms-zona-datos { display: flex; gap: 18px; margin-bottom: 6px; font-size: 0.85rem; }
+.ms-zona-datos strong { color: #fff; font-size: 1.05rem; }
+.ms-zona-top { font-size: 0.78rem; display: flex; flex-wrap: wrap; gap: 6px; }
+.ms-zona-top span { padding: 2px 7px; background: rgba(255,255,255,0.05); border-radius: 4px; }
+
+/* Filtros de análisis en el panel */
+.ms-analisis-filtros { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.ms-analisis-filtros .form-group { display: flex; flex-direction: column; gap: 3px; }
+.ms-analisis-filtros small { color: rgba(255,255,255,0.4); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.ms-analisis-filtros select { width: 100%; padding: 6px 8px; }
+
+@media (max-width: 992px) {
+    .ms-layout { grid-template-columns: 1fr; height: auto; }
+    .ms-escena { height: 70vw; min-height: 320px; }
+}
+
+/* ============================================================
+   MAPSTREAM: panel lateral — equipos, jugadores, bajas, eventos
+   ============================================================ */
+/* Panel de equipos */
+.ms-equipos { display: flex; flex-direction: column; gap: 4px; }
+.ms-eq { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; overflow: hidden; transition: border-color 0.15s, background 0.15s; border-left: 3px solid var(--c, rgba(255,255,255,0.3)); }
+.ms-eq.fuera { opacity: 0.45; }
+.ms-eq.foco { background: rgba(255,255,255,0.065); border-color: rgba(255,255,255,0.18); }
+.ms-eq-cabeza { display: flex; align-items: center; gap: 5px; padding: 6px 7px 6px 6px; }
+.ms-eq-n { min-width: 18px; font-size: 0.65rem; font-weight: 700; color: var(--c, rgba(255,255,255,0.4)); text-align: center; font-family: 'Orbitron', sans-serif; }
+.ms-eq-logo { width: 28px; height: 28px; border-radius: 5px; object-fit: contain; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
+.ms-eq-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; cursor: pointer; }
+.ms-eq-info input[type="checkbox"] { display: none; }
+.ms-eq-info strong { font-size: 0.82rem; font-weight: 700; color: var(--c, #fff); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-eq-info small { font-size: 0.68rem; color: rgba(255,255,255,0.4); }
+.ms-btn { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: none; border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer; color: rgba(255,255,255,0.4); font-size: 0.65rem; transition: color 0.12s, border-color 0.12s, background 0.12s; flex-shrink: 0; }
+.ms-btn:hover { color: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.3); }
+.ms-btn.activo { color: var(--accent); border-color: var(--accent-dim); background: rgba(0,240,255,0.08); }
+/* Jugadores dentro de cada equipo */
+.ms-jugadores { border-top: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; }
+.ms-jugador { display: flex; align-items: center; gap: 5px; padding: 4px 8px; font-size: 0.72rem; }
+.ms-jugador.muerto { opacity: 0.38; text-decoration: line-through; }
+.ms-jug-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c, rgba(255,255,255,0.5)); flex-shrink: 0; }
+.ms-jug-dot.sinpos { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); }
+.ms-jugador.muerto .ms-jug-dot { background: rgba(255,80,80,0.6); }
+.ms-jug-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255,255,255,0.8); }
+.ms-jug-kills { font-size: 0.65rem; font-weight: 700; color: var(--c, rgba(255,255,255,0.7)); background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+.ms-jug-arma { font-size: 0.63rem; color: rgba(255,255,255,0.35); flex-shrink: 0; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Stats superiores */
+.ms-stats { display: flex; gap: 8px; }
+.ms-stats > div { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 6px 4px; background: rgba(255,255,255,0.03); border-radius: 6px; }
+.ms-stats strong { font-size: 1rem; font-weight: 700; font-family: 'Orbitron', sans-serif; color: #fff; }
+.ms-stats span { font-size: 0.63rem; color: rgba(255,255,255,0.4); text-align: center; }
+/* Bajas */
+.ms-bajas { display: flex; flex-direction: column; gap: 3px; max-height: 200px; overflow-y: auto; }
+.ms-baja { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; font-size: 0.72rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.ms-baja:last-child { border-bottom: none; }
+.ms-baja small { font-size: 0.63rem; color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+/* Controles de reproducción */
+.ms-controles {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(6px);
+    border-top: 1px solid rgba(255,255,255,0.07);
+    flex-shrink: 0;
+}
+.ms-controles > .btn-sec {
+    width: 32px; height: 32px; min-width: 32px;
+    padding: 0; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+.ms-play {
+    width: 40px !important; min-width: 40px !important; height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,240,255,0.08) !important;
+    border: 1px solid rgba(0,240,255,0.45) !important;
+    color: #00f0ff !important;
+    box-shadow: 0 0 10px rgba(0,240,255,0.1);
+    flex-shrink: 0;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.ms-play:hover {
+    background: rgba(0,240,255,0.18) !important;
+    box-shadow: 0 0 18px rgba(0,240,255,0.3) !important;
+    color: #00f0ff !important;
+}
+.ms-linea-caja {
+    flex: 1; min-width: 0; position: relative;
+    padding: 10px 0;
+}
+.ms-marcas { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; }
+.ms-marca {
+    position: absolute; width: 2px; height: 10px;
+    background: rgba(0,240,255,0.55); border-radius: 1px;
+    transform: translateX(-1px); top: 50%; margin-top: -5px;
+}
+#ms-linea {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px;
+    background: rgba(255,255,255,0.13); border-radius: 2px;
+    outline: none; cursor: pointer; border: none; display: block;
+}
+#ms-linea::-webkit-slider-runnable-track { background: transparent; height: 4px; border-radius: 2px; }
+#ms-linea::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #00f0ff; cursor: pointer; margin-top: -5px;
+    box-shadow: 0 0 8px rgba(0,240,255,0.65), 0 0 0 2px rgba(0,0,0,0.4);
+    border: none; transition: transform 0.15s;
+}
+#ms-linea:hover::-webkit-slider-thumb { transform: scale(1.2); }
+#ms-linea::-moz-range-track { background: rgba(255,255,255,0.13); height: 4px; border-radius: 2px; border: none; }
+#ms-linea::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #00f0ff; cursor: pointer; border: 2px solid rgba(0,0,0,0.4);
+    box-shadow: 0 0 8px rgba(0,240,255,0.65);
+}
+.ms-total {
+    font-family: 'Orbitron', 'Inter', monospace;
+    font-size: 0.68rem; letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.7); min-width: 40px; text-align: right;
+    flex-shrink: 0;
+}
+.ms-controles select {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.55); font-size: 0.68rem;
+    padding: 4px 6px; border-radius: 6px;
+    cursor: pointer; outline: none; min-width: 46px;
+    flex-shrink: 0;
+}
+.ms-controles select:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
+.ms-fases { display: flex; gap: 4px; padding: 5px 10px; flex-wrap: wrap; align-items: center; }
+.ms-fases .btn-sec { padding: 4px 10px; border-radius: 20px; font-size: 0.72rem; height: 28px; }
+.ms-reloj { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: rgba(255,255,255,0.7); min-width: 40px; text-align: center; }
+.ms-elegir { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+/* Panel de eventos */
+.ms-eventos-bloque { gap: 5px; }
+.ms-ev-row { display: flex; align-items: center; gap: 7px; font-size: 0.75rem; color: rgba(255,255,255,0.75); padding: 2px 0; }
+.ms-ev-row strong { color: #fff; }
+.ms-ev-row i { width: 14px; text-align: center; }
+
+/* Panel de estadísticas por jugador */
+.ms-stats-cont { display: flex; flex-direction: column; gap: 10px; padding: 12px 10px; overflow-y: auto; }
+.ms-st-equipo { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; overflow: hidden; }
+.ms-st-eq-cab { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.04); }
+.ms-st-eq-cab strong { font-size: 0.85rem; }
+.ms-st-eq-resumen { display: flex; gap: 10px; font-size: 0.72rem; color: rgba(255,255,255,0.55); }
+.ms-st-eq-resumen span { display: flex; align-items: center; gap: 4px; }
+.ms-st-elim { color: rgba(255,80,80,0.8) !important; }
+.ms-st-tabla { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.ms-st-tabla th { padding: 5px 10px; text-align: left; color: rgba(255,255,255,0.35); font-weight: 500; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.ms-st-tabla td { padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: middle; }
+.ms-st-tabla tr:last-child td { border-bottom: none; }
+.ms-st-tabla tr.ms-st-muerto { opacity: 0.5; }
+.ms-st-num { text-align: center; font-variant-numeric: tabular-nums; }
+.ms-st-num b { color: #fff; }
+.ms-st-arma { color: rgba(255,255,255,0.6); font-size: 0.7rem; }
+.ms-st-t { color: rgba(255,255,255,0.45); font-size: 0.7rem; font-family: 'Orbitron', monospace; }
+.ms-st-vivo { color: #00ff99; font-family: 'Inter', sans-serif; font-size: 0.7rem; }
+
+/* ============================================================
+   ZONA DE CARGA (arrastrar archivos) — MapStream y Estadísticas
+   ============================================================ */
+.ms-drop {
+    position: relative; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; gap: 6px;
+    padding: 48px 24px; min-height: 220px; border-radius: var(--card-radius);
+    border: 1px solid var(--border); background: var(--surface);
+    box-shadow: 0 0 40px -28px var(--accent-glow);
+    cursor: pointer; transition: border-color .2s, box-shadow .2s;
+    text-decoration: none; color: inherit;
+}
+.ms-drop::before {
+    content: ''; position: absolute; inset: 14px;
+    border: 1px dashed var(--border2); border-radius: calc(var(--card-radius) - 6px);
+    pointer-events: none; transition: border-color .2s;
+}
+.ms-drop:hover, .ms-drop.encima { border-color: var(--border2); box-shadow: 0 0 60px -20px var(--accent-glow); }
+.ms-drop.encima::before { border-color: var(--accent-dim); }
+.ms-drop i.fa-cloud-arrow-up, .ms-drop i.fa-file-csv { font-size: 36px; color: var(--accent); margin-bottom: 4px; }
+.ms-drop strong { font-family: 'Rajdhani', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: .03em; }
+.ms-drop span { color: var(--text3, rgba(255,255,255,.45)); font-size: 12px; max-width: 480px; line-height: 1.6; }
 
 /* --- Impresión / PDF: estilo claro tipo reporte --- */
 @media print {

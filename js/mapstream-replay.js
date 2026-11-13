@@ -122,7 +122,8 @@ const FFReplay = (() => {
                     buenos++;
                     for (const f of regs) {
                         if (!porEntidad.has(f[0])) porEntidad.set(f[0], []);
-                        porEntidad.get(f[0]).push([t, zz(f[1]) / 1000, zz(f[2]) / 1000, zz(f[3]) / 1000]);
+                        // f[14]=sin_yaw (este), f[16]=cos_yaw (norte) — float32 bits guardados como varint uint32
+                        porEntidad.get(f[0]).push([t, zz(f[1]) / 1000, zz(f[2]) / 1000, zz(f[3]) / 1000, f[14], f[16]]);
                     }
                     p = k - 1;
                     break;
@@ -396,13 +397,41 @@ const FFReplay = (() => {
                 const serie = porEntidad.get(entidadDe.get(pid)) || [];
                 const pos = [];
                 let ultimo = -1;
-                serie.forEach(([t, x, y, z]) => {
-                    if (y > ALTURA_LOBBY || t - ultimo < 0.45) return;   // ~2 muestras por segundo
-                    ultimo = t;
+                serie.forEach(([t, x, y, z, r14bits, r16bits]) => {
+                    if (t - ultimo < 0.45) return;   // ~2 muestras por segundo
                     const [u, v] = aPlano(x, z);
-                    pos.push([Math.round(t * 10) / 10, u, v]);
+                    // Isla del lobby: fuera del mapa a gran altura → descartar.
+                    // El paracaídas y el avión SÍ están sobre el mapa aunque y > ALTURA_LOBBY.
+                    if (y > ALTURA_LOBBY && (u < -100 || u > 1100 || v < -100 || v > 1100)) return;
+                    ultimo = t;
+                    // r14bits=sin_yaw(este), r16bits=cos_yaw(norte) — float32 IEEE 754 guardados como varint uint32
+                    // Ángulo canvas: atan2(-r16, r14) porque norte=-y en canvas (verificado dot=1.000)
+                    let rot;
+                    if (r14bits != null && r16bits != null) {
+                        const tmp = new DataView(new ArrayBuffer(4));
+                        tmp.setUint32(0, r14bits >>> 0, true);
+                        const r14 = tmp.getFloat32(0, true);
+                        tmp.setUint32(0, r16bits >>> 0, true);
+                        const r16 = tmp.getFloat32(0, true);
+                        if (isFinite(r14) && isFinite(r16)) rot = Math.round(Math.atan2(-r16, r14) * 10000) / 10000;
+                    }
+                    // pos: [t, u, v, rot?, enAire?]  enAire=1 cuando viene del paracaídas (y > ALTURA_LOBBY)
+                    const enAire = y > ALTURA_LOBBY ? 1 : 0;
+                    if (rot != null) pos.push([Math.round(t * 10) / 10, u, v, rot, enAire]);
+                    else pos.push(enAire ? [Math.round(t * 10) / 10, u, v, null, 1] : [Math.round(t * 10) / 10, u, v]);
                 });
-                return { id: pid, nombre: nombre.get(pid) || `Jugador ${pid & 0xff}`, muerteEn: muerte.get(pid) ?? null, pos };
+                // Movimiento: distancia (m) y tiempo, mismo filtro que estadisticas-csv.js
+                let tMov = 0, distMov = 0;
+                for (let i = 1; i < pos.length; i++) {
+                    const a = pos[i - 1], q = pos[i];
+                    const dt = q[0] - a[0];
+                    const d = Math.hypot(q[1] - a[1], q[2] - a[2]) * cal.lado / 1000;
+                    if (dt <= 0 || dt > 4 || d / dt > 45) continue;
+                    distMov += d;
+                    if (d / dt > 0.8) tMov += dt;
+                }
+                return { id: pid, nombre: nombre.get(pid) || `Jugador ${pid & 0xff}`, muerteEn: muerte.get(pid) ?? null, pos,
+                    distanciaEstimada: Math.round(distMov), tiempoMovimiento: Math.round(tMov) };
             });
             return {
                 id: eq, nombre: nombreEquipo.get(eq) || `Equipo ${eq}`,
@@ -513,6 +542,53 @@ const FFReplay = (() => {
             if (Math.hypot(cx - ax, cy - ay) > 150) avion = { a: { x: ax, y: ay }, b: { x: cx, y: cy } };
         }
 
+        // Lee todos los varints de mensajes enmarcados del mismo formato que bajasBin
+        function msgCombate(tipo, id) {
+            const out = [];
+            for (const [t, ini, fin] of mensajes(b, dv, tipo, id, 0x00)) {
+                try { const f = []; let k = ini, v; while (k < fin) { [v, k] = varint(b, k); f.push(v); } out.push({ t, f }); }
+                catch (e) { /* incompleto */ }
+            }
+            return out;
+        }
+
+        // Rescates (02 8e): f[0]=revivido PID, f[1]=revividor PID
+        const rescates = msgCombate(0x02, 0x8e).map(m => {
+            const pos = posEn(m.f[1], m.t);
+            return { t: Math.round(m.t * 10) / 10, revividor: m.f[1], revivido: m.f[0], x: pos ? pos[1] : undefined, y: pos ? pos[2] : undefined };
+        }).filter(r => r.x != null);
+
+        // Muros gloo (02 dd): f[15]=jugador PID que lo colocó; posición por trayectoria
+        const gloos = msgCombate(0x02, 0xdd).map(m => {
+            const pos = posEn(m.f[15], m.t);
+            return { t: Math.round(m.t * 10) / 10, jugador: m.f[15], x: pos ? pos[1] : undefined, y: pos ? pos[2] : undefined };
+        }).filter(g => g.x != null);
+
+        // Zonas de caída: primer punto en tierra de cada jugador
+        const caidas = equipos.flatMap(e => e.jugadores.map(j => {
+            for (let i = 0; i < j.pos.length; i++) {
+                if (!j.pos[i][4]) return { x: j.pos[i][1], y: j.pos[i][2], equipo: e.id, jugador: j.id };
+            }
+            return null;
+        }).filter(Boolean));
+
+        // Arma más usada por jugador (impactos 02 6a: f[0]=atacante PID, f[4]=arma zigzag)
+        // 600-628 son granadas/habilidades, ≥80000 son habilidades especiales → se omiten
+        const hitsArma = new Map();
+        msgCombate(0x02, 0x6a).forEach(m => {
+            const pid = m.f[0], aid = zz(m.f[4] || 0);
+            if (aid <= 0 || (aid >= 600 && aid <= 628) || aid >= 80000) return;
+            if (!hitsArma.has(pid)) hitsArma.set(pid, new Map());
+            hitsArma.get(pid).set(aid, (hitsArma.get(pid).get(aid) || 0) + 1);
+        });
+        equipos.forEach(e => e.jugadores.forEach(j => {
+            const h = hitsArma.get(j.id);
+            if (!h) return;
+            const top = [...h].sort((a, x) => x[1] - a[1]);
+            j.armaTop = top[0] ? (nombreArma(top[0][0]) || null) : null;
+            j.armasUsadas = top.slice(0, 3).map(([id, hits]) => ({ id, nombre: nombreArma(id) || `${id}`, hits }));
+        }));
+
         return {
             mapa: cal.mapa,
             nombre: info.RoomName || `Partida ${info.MatchID}`,
@@ -520,6 +596,7 @@ const FFReplay = (() => {
             duracion: Math.ceil(info.GameTotalTime || 0),
             idPartida: idTexto || String(info.MatchID || ''),   // sin redondeo si llegó como texto
             equipos, bajas, otrasMuertes, impactos, zonas: zonasPlano, avion,
+            rescates, gloos, caidas,
             origen: 'replay', fuentePosiciones: fuente, lado: cal.lado
         };
     }

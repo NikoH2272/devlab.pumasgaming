@@ -47,7 +47,7 @@ class MapStream {
         this.ocultos = new Set();         // equipos que no se dibujan
         this.foco = new Set();            // equipos resaltados (el resto se atenúa)
         this.seguir = null;               // equipo que sigue la cámara
-        this.capas = { estelas: true, nombres: true, bajas: true, zona: true, fasesPrevias: true, avion: true };
+        this.capas = { estelas: true, nombres: true, etiquetas: true, bajas: true, zona: true, fasesPrevias: true, avion: true, rotacion: false, acciones: true, caidas: true, rutaCompleta: false };
         this.vista = { z: 1, x: 0, y: 0 };
         this._ultimo = 0;
         this._cuadro = this._cuadro.bind(this);
@@ -140,12 +140,26 @@ class MapStream {
         if (!p.length || t < p[0][0]) return null;
         if (j.muerteEn != null && t > j.muerteEn) return null;
         let lo = 0, hi = p.length - 1;
-        if (t >= p[hi][0]) return t - p[hi][0] <= MS_HUECO ? { x: p[hi][1], y: p[hi][2] } : null;
+        if (t >= p[hi][0]) return t - p[hi][0] <= MS_HUECO ? { x: p[hi][1], y: p[hi][2], rot: p[hi][3], enAire: !!p[hi][4] } : null;
         while (hi - lo > 1) { const m = (lo + hi) >> 1; if (p[m][0] <= t) lo = m; else hi = m; }
         const a = p[lo], b = p[hi];
-        if (b[0] - a[0] > MS_HUECO) return t - a[0] <= MS_HUECO ? { x: a[1], y: a[2] } : null;
+        if (b[0] - a[0] > MS_HUECO) return t - a[0] <= MS_HUECO ? { x: a[1], y: a[2], rot: a[3], enAire: !!a[4] } : null;
         const f = (t - a[0]) / ((b[0] - a[0]) || 1);
-        return { x: a[1] + (b[1] - a[1]) * f, y: a[2] + (b[2] - a[2]) * f };
+        // Interpolación de ángulo con manejo del wrap-around 2π
+        let rot;
+        if (a[3] != null && b[3] != null) {
+            let dr = b[3] - a[3];
+            if (dr > Math.PI) dr -= 2 * Math.PI;
+            if (dr < -Math.PI) dr += 2 * Math.PI;
+            rot = a[3] + dr * f;
+        }
+        return { x: a[1] + (b[1] - a[1]) * f, y: a[2] + (b[2] - a[2]) * f, rot, enAire: !!(a[4] || b[4]) };
+    }
+
+    // Kills que hizo un jugador hasta el instante t
+    killsJugador(j, t = this.tiempo) {
+        if (!this.replay) return 0;
+        return this.replay.bajas.filter(b => b.t <= t && b.idMatador === j.id).length;
     }
 
     vivo(e, j, t = this.tiempo) {
@@ -321,6 +335,20 @@ class MapStream {
             });
         }
 
+        // Zonas de caída: pequeños puntos donde aterrizó cada jugador
+        if (this.capas.caidas) {
+            (this.replay.caidas || []).forEach(cd => {
+                const e = this.replay.equipos.find(x => x.id === cd.equipo);
+                if (!e || this.ocultos.has(e.id)) return;
+                const pt = P(cd);
+                c.save();
+                c.globalAlpha = atenuar(e) ? 0.1 : 0.45;
+                c.fillStyle = e.color;
+                c.beginPath(); c.arc(pt.x, pt.y, Math.max(2.5, k * 2.8), 0, Math.PI * 2); c.fill();
+                c.restore();
+            });
+        }
+
         // Estelas
         if (this.capas.estelas) {
             visibles.forEach(e => {
@@ -332,12 +360,48 @@ class MapStream {
                     const desde = t - this.estela;
                     const qs = j.pos.filter(q => q[0] >= desde && q[0] <= t);
                     const ahora = this.posicion(j);
-                    if (ahora) qs.push([t, ahora.x, ahora.y]);
+                    if (ahora) qs.push([t, ahora.x, ahora.y, ahora.rot, ahora.enAire ? 1 : 0]);
                     if (qs.length < 2) return;
+                    // Tramos en tierra: línea sólida. Tramos en paracaídas: punteada y tenue.
+                    let enPunto = false;
                     c.beginPath();
                     qs.forEach((q, i) => {
                         const p = P({ x: q[1], y: q[2] });
+                        const aire = !!q[4];
+                        if (aire !== enPunto) {
+                            if (i > 0) c.stroke();
+                            c.beginPath();
+                            c.globalAlpha = atenuar(e) ? 0.08 : (aire ? 0.3 : 0.55);
+                            c.setLineDash(aire ? [4, 5] : []);
+                            enPunto = aire;
+                        }
                         if (i === 0 || q[0] - qs[i - 1][0] > MS_HUECO) c.moveTo(p.x, p.y); else c.lineTo(p.x, p.y);
+                    });
+                    c.stroke();
+                    c.setLineDash([]);
+                });
+                c.restore();
+            });
+        }
+
+        // Ruta completa del equipo en foco (toda la trayectoria de la partida)
+        if (this.capas.rutaCompleta && this.foco.size) {
+            this.foco.forEach(eid => {
+                const e = visibles.find(x => x.id === eid);
+                if (!e) return;
+                c.save();
+                c.lineWidth = Math.max(1.5, k * 1.5);
+                c.lineJoin = c.lineCap = 'round';
+                c.globalAlpha = 0.28;
+                c.strokeStyle = e.color;
+                c.setLineDash([]);
+                e.jugadores.forEach(j => {
+                    if (!j.pos.length) return;
+                    c.beginPath();
+                    j.pos.forEach((q, i) => {
+                        const p = P({ x: q[1], y: q[2] });
+                        if (i === 0 || q[0] - j.pos[i - 1][0] > MS_HUECO) c.moveTo(p.x, p.y);
+                        else c.lineTo(p.x, p.y);
                     });
                     c.stroke();
                 });
@@ -359,10 +423,37 @@ class MapStream {
                 c.save();
                 c.globalAlpha = tenue ? 0.25 : 1;
                 c.shadowColor = e.color; c.shadowBlur = tenue ? 0 : 8;
-                c.fillStyle = e.color;
-                c.beginPath(); c.arc(p.x, p.y, R, 0, Math.PI * 2); c.fill();
-                c.shadowBlur = 0;
-                c.lineWidth = 1.5; c.strokeStyle = '#04050a'; c.stroke();
+                if (q.enAire) {
+                    // Paracaídas: círculo hueco + líneas de cuerda
+                    const rp = R * 1.3;
+                    c.strokeStyle = e.color; c.lineWidth = 2;
+                    c.beginPath(); c.arc(p.x, p.y - rp * 0.6, rp, Math.PI, 0); c.stroke();
+                    c.beginPath(); c.moveTo(p.x - rp * 0.7, p.y - rp * 0.6); c.lineTo(p.x, p.y + rp * 0.5);
+                    c.moveTo(p.x + rp * 0.7, p.y - rp * 0.6); c.lineTo(p.x, p.y + rp * 0.5); c.stroke();
+                    c.fillStyle = e.color; c.beginPath(); c.arc(p.x, p.y + rp * 0.5, R * 0.5, 0, Math.PI * 2); c.fill();
+                } else {
+                    c.fillStyle = e.color;
+                    c.beginPath(); c.arc(p.x, p.y, R, 0, Math.PI * 2); c.fill();
+                    c.shadowBlur = 0;
+                    c.lineWidth = 1.5; c.strokeStyle = '#04050a'; c.stroke();
+                }
+                // Flecha de dirección: rot = atan2(-cos_yaw, sin_yaw) → ángulo canvas directo (verificado)
+                if (this.capas.rotacion && q.rot != null) {
+                    const ang = q.rot;
+                    const len = R * 2.2;
+                    const ax = p.x + Math.cos(ang) * len, ay = p.y + Math.sin(ang) * len;
+                    const hl = R * 0.65, a1 = ang + Math.PI * 0.75, a2 = ang - Math.PI * 0.75;
+                    c.lineWidth = 2; c.strokeStyle = e.color; c.lineCap = 'round';
+                    c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(ax, ay); c.stroke();
+                    c.beginPath(); c.moveTo(ax, ay); c.lineTo(ax + Math.cos(a1) * hl, ay + Math.sin(a1) * hl);
+                    c.moveTo(ax, ay); c.lineTo(ax + Math.cos(a2) * hl, ay + Math.sin(a2) * hl); c.stroke();
+                }
+                // Etiqueta individual: nombre + kills (debajo del punto)
+                if (this.capas.etiquetas && !tenue && !q.enAire && (this.vista.z >= 2 || this.foco.has(e.id) || this.seguir === e.id)) {
+                    const kills = this.killsJugador(j);
+                    const txt = kills > 0 ? `${j.nombre} ×${kills}` : j.nombre;
+                    this._etiqueta(c, txt, p.x, p.y + R + 10, e.color, 9);
+                }
                 c.restore();
             });
             // Nombre del equipo sobre el grupo (con zoom o si está en foco/seguido)
@@ -371,16 +462,55 @@ class MapStream {
                 this._etiqueta(c, e.nombre, cx, cy, e.color);
             }
         });
+
+        // Acciones en el mapa: rescates (cruz verde) y muros gloo (cuadrado azul)
+        if (this.capas.acciones) {
+            const equipoDe = pid => this.replay.equipos.find(e => e.jugadores.some(j => j.id === pid));
+            // Rescates
+            (this.replay.rescates || []).forEach(r => {
+                if (r.x == null || r.t > t) return;
+                const edad = t - r.t;
+                if (edad > 7) return;
+                const pt = P(r), al = 1 - edad / 7;
+                c.save(); c.globalAlpha = al;
+                const rr = Math.max(5, k * 4.5);
+                c.strokeStyle = '#00ff99'; c.lineWidth = 2.5; c.lineCap = 'round';
+                c.beginPath();
+                c.moveTo(pt.x - rr, pt.y); c.lineTo(pt.x + rr, pt.y);
+                c.moveTo(pt.x, pt.y - rr); c.lineTo(pt.x, pt.y + rr);
+                c.stroke();
+                c.strokeStyle = '#00ff99'; c.lineWidth = 1.5; c.globalAlpha = al * 0.4;
+                c.beginPath(); c.arc(pt.x, pt.y, rr + edad * 6, 0, Math.PI * 2); c.stroke();
+                c.restore();
+            });
+            // Muros gloo
+            (this.replay.gloos || []).forEach(g => {
+                if (g.x == null || g.t > t) return;
+                const edad = t - g.t;
+                if (edad > 10) return;
+                const pt = P(g), al = Math.max(0.1, 0.8 - edad / 12);
+                const eq = equipoDe(g.jugador);
+                c.save(); c.globalAlpha = al;
+                const s = Math.max(4, k * 3.5);
+                c.strokeStyle = eq ? eq.color : '#00e5ff'; c.lineWidth = 1.5;
+                c.fillStyle = eq ? eq.color + '33' : 'rgba(0,229,255,0.2)';
+                c.fillRect(pt.x - s, pt.y - s, s * 2, s * 2);
+                c.strokeRect(pt.x - s, pt.y - s, s * 2, s * 2);
+                c.restore();
+            });
+        }
     }
 
-    _etiqueta(c, txt, x, y, color) {
+    _etiqueta(c, txt, x, y, color, size = 11) {
         c.save();
-        c.font = `700 11px ${MS_FUENTE}`;
+        c.shadowBlur = 0; c.globalAlpha = 1;
+        c.font = `700 ${size}px ${MS_FUENTE}`;
         c.textAlign = 'center'; c.textBaseline = 'middle';
         const w = c.measureText(txt).width + 12;
+        const h = size + 6;
         c.fillStyle = 'rgba(4, 5, 10, 0.88)';
-        c.fillRect(x - w / 2, y - 9, w, 18);
-        c.fillStyle = color; c.fillRect(x - w / 2, y - 9, 3, 18);
+        c.fillRect(x - w / 2, y - h / 2, w, h);
+        c.fillStyle = color; c.fillRect(x - w / 2, y - h / 2, 3, h);
         c.fillStyle = '#fff'; c.fillText(txt, x + 1, y + 0.5);
         c.restore();
     }

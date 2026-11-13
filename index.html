@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pumas Gaming Dev Lab | Gestión de Desarrollo Competitivo</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css?v=48">
+    <link rel="stylesheet" href="css/style.css?v=51">
     <link rel="stylesheet" href="css/moderno.css?v=41">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -493,30 +493,52 @@
 
     <div id="ms-visor" class="ms-layout" hidden>
         <div class="ms-escena">
-            <div class="ms-lienzo"><canvas id="ms-canvas" aria-label="Repetición de la partida"></canvas>
-                <div class="tb-flot">
-                    <button type="button" class="btn-sec" onclick="mapstream.zoom(1.3)" title="Acercar" aria-label="Acercar"><i class="fa-solid fa-plus"></i></button>
-                    <button type="button" class="btn-sec" onclick="mapstream.zoom(1 / 1.3)" title="Alejar" aria-label="Alejar"><i class="fa-solid fa-minus"></i></button>
-                    <button type="button" class="btn-sec" onclick="mapstream.centrar(); msAlCambiarTiempo(mapstream.tiempo, true)" title="Centrar" aria-label="Centrar"><i class="fa-solid fa-expand"></i></button>
-                    <button type="button" class="btn-sec" onclick="msCaptura()" title="Guardar imagen" aria-label="Guardar imagen"><i class="fa-solid fa-camera"></i></button>
-                </div>
-                <div class="ms-reloj" id="ms-reloj">00:00</div>
+            <div class="ms-tabs-bar">
+                <button class="ms-tab activo" data-vista="replay" onclick="msVista('replay')"><i class="fa-solid fa-film"></i> Repetición</button>
+                <button class="ms-tab" data-vista="calor-movimiento" onclick="msVista('calor-movimiento')"><i class="fa-solid fa-fire"></i> Movimiento</button>
+                <button class="ms-tab" data-vista="calor-peleas" onclick="msVista('calor-peleas')"><i class="fa-solid fa-crosshairs"></i> Peleas</button>
+                <button class="ms-tab" data-vista="zona" onclick="msVista('zona')"><i class="fa-solid fa-circle-nodes"></i> Zonas</button>
+                <button class="ms-tab" data-vista="stats" onclick="msVista('stats')"><i class="fa-solid fa-chart-bar"></i> Estadísticas</button>
             </div>
-            <div class="ms-controles">
-                <button type="button" class="btn-sec" onclick="msSaltar(-10)" title="Atrás 10 s" aria-label="Atrás 10 segundos"><i class="fa-solid fa-backward"></i></button>
-                <button type="button" class="btn-generar ms-play" id="ms-play" onclick="msPlay()" aria-label="Reproducir o pausar"><i class="fa-solid fa-play"></i></button>
-                <button type="button" class="btn-sec" onclick="msSaltar(10)" title="Adelante 10 s" aria-label="Adelante 10 segundos"><i class="fa-solid fa-forward"></i></button>
-                <div class="ms-linea-caja">
-                    <div id="ms-marcas" class="ms-marcas"></div>
-                    <input type="range" id="ms-linea" min="0" max="1" step="0.5" value="0" oninput="mapstream.ir(Number(this.value))" aria-label="Línea de tiempo">
+
+            <div id="ms-modo-replay">
+                <div class="ms-lienzo"><canvas id="ms-canvas" aria-label="Repetición de la partida"></canvas>
+                    <div class="tb-flot">
+                        <button type="button" class="btn-sec" onclick="mapstream.zoom(1.3)" title="Acercar" aria-label="Acercar"><i class="fa-solid fa-plus"></i></button>
+                        <button type="button" class="btn-sec" onclick="mapstream.zoom(1 / 1.3)" title="Alejar" aria-label="Alejar"><i class="fa-solid fa-minus"></i></button>
+                        <button type="button" class="btn-sec" onclick="mapstream.centrar(); msAlCambiarTiempo(mapstream.tiempo, true)" title="Centrar" aria-label="Centrar"><i class="fa-solid fa-expand"></i></button>
+                        <button type="button" class="btn-sec" onclick="msCaptura()" title="Guardar imagen" aria-label="Guardar imagen"><i class="fa-solid fa-camera"></i></button>
+                    </div>
+                    <div class="ms-reloj" id="ms-reloj">00:00</div>
                 </div>
-                <span class="ms-total" id="ms-total">00:00</span>
-                <select aria-label="Velocidad" onchange="msVelocidad(this.value)">
-                    <option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option>
-                    <option value="4">4×</option><option value="8">8×</option><option value="16">16×</option>
-                </select>
+                <div class="ms-controles">
+                    <button type="button" class="btn-sec" onclick="msSaltar(-10)" title="Atrás 10 s" aria-label="Atrás 10 segundos"><i class="fa-solid fa-backward"></i></button>
+                    <button type="button" class="btn-generar ms-play" id="ms-play" onclick="msPlay()" aria-label="Reproducir o pausar"><i class="fa-solid fa-play"></i></button>
+                    <button type="button" class="btn-sec" onclick="msSaltar(10)" title="Adelante 10 s" aria-label="Adelante 10 segundos"><i class="fa-solid fa-forward"></i></button>
+                    <div class="ms-linea-caja">
+                        <div id="ms-marcas" class="ms-marcas"></div>
+                        <input type="range" id="ms-linea" min="0" max="1" step="0.5" value="0" oninput="mapstream.ir(Number(this.value))" aria-label="Línea de tiempo">
+                    </div>
+                    <span class="ms-total" id="ms-total">00:00</span>
+                    <select aria-label="Velocidad" onchange="msVelocidad(this.value)">
+                        <option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+                        <option value="4">4×</option><option value="8">8×</option><option value="16">16×</option>
+                    </select>
+                </div>
+                <div id="ms-fases" class="ms-fases"></div>
             </div>
-            <div id="ms-fases" class="ms-fases"></div>
+
+            <div id="ms-modo-calor" hidden>
+                <div class="ms-lienzo"><canvas id="ms-calor" aria-label="Mapa de calor"></canvas></div>
+            </div>
+
+            <div id="ms-modo-zona" hidden>
+                <div id="ms-zona-stats" class="ms-zona-cont"></div>
+            </div>
+
+            <div id="ms-modo-stats" hidden>
+                <div id="ms-stats-cont" class="ms-stats-cont"></div>
+            </div>
         </div>
 
         <aside class="ms-panel tb-panel">
@@ -538,10 +560,25 @@
                 <h3>Registro de bajas</h3>
                 <div id="ms-bajas" class="ms-bajas"></div>
             </div>
+            <div id="ms-eventos" class="tb-bloque ms-eventos-bloque" hidden></div>
             <div class="tb-bloque">
                 <h3>Mostrar</h3>
                 <div id="ms-capas" class="checks"></div>
                 <p class="ayuda">Espacio reproduce/pausa · ← → mueven 5 s · rueda o pellizco para acercar.</p>
+            </div>
+            <div id="ms-bloque-analisis" class="tb-bloque" hidden>
+                <h3>Filtros <span id="ms-analisis-titulo" class="ayuda"></span></h3>
+                <div class="ms-analisis-filtros">
+                    <label class="form-group"><small>Equipo</small>
+                        <select id="ms-calor-equipo" onchange="msVistaActual!=='replay'&&msCalorRenderizar(msVistaActual==='calor-peleas'?'peleas':'movimiento')"><option value="">Todos</option></select>
+                    </label>
+                    <label class="form-group"><small>Fase de zona</small>
+                        <select id="ms-calor-fase" onchange="msVistaActual!=='replay'&&msCalorRenderizar(msVistaActual==='calor-peleas'?'peleas':'movimiento')"><option value="">Todas</option></select>
+                    </label>
+                </div>
+                <button type="button" class="btn-sec" onclick="msCalorRenderizar(msVistaActual==='calor-peleas'?'peleas':'movimiento')">
+                    <i class="fa-solid fa-rotate"></i> Actualizar
+                </button>
             </div>
         </aside>
     </div>
@@ -1016,10 +1053,11 @@
 <script src="js/mapeador-caidas-analisis.js?v=4"></script>
 <script src="js/mapeador-caidas.js?v=25"></script>
 <script src="js/estudio.js?v=13"></script>
-<script src="js/mapstream.js?v=15"></script>
-<script src="js/mapstream-replay.js?v=19"></script>
+<script src="js/mapstream.js?v=18"></script>
+<script src="js/mapstream-replay.js?v=23"></script>
 <script src="js/mapstream-informe.js?v=19"></script>
-<script src="js/mapstream-vista.js?v=15"></script>
+<script src="js/mapstream-calor.js?v=2"></script>
+<script src="js/mapstream-vista.js?v=18"></script>
 <script src="js/estadisticas-csv.js?v=4"></script>
 <script src="js/estadisticas-vista.js?v=4"></script>
 <script src="js/resultados.js?v=14"></script>

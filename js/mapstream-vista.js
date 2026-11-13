@@ -21,7 +21,7 @@ function abrirMapStream() {
 function msMostrar(visor) {
     $('#ms-carga').hidden = visor;
     $('#ms-visor').hidden = !visor;
-    if (visor) { mapstream.medir(); requestAnimationFrame(() => mapstream.medir()); }
+    if (visor) { msVista('replay'); mapstream.medir(); requestAnimationFrame(() => mapstream.medir()); }
 }
 
 // ---------- Carga ----------
@@ -124,10 +124,24 @@ function msCargar(replay, origen = '') {
     $('#ms-total').textContent = relojMs(r.duracion);
     msPintarFases();
     msPintarCapas();
+    msPintarFiltrosAnalisis();
     msAviso('');
     msMostrar(true);
     msAlCambiarTiempo(mapstream.tiempo, true);
     msPintarBotonPlay();
+    // Enriquecer equipos con logos del roster de la organización
+    if (typeof Auth !== 'undefined') {
+        Auth.equiposVisibles().then(equiposOrg => {
+            const norm = s => s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
+            r.equipos.forEach(eq => {
+                const eqN = norm(eq.nombre);
+                const match = equiposOrg.find(t => norm(t.nombre) === eqN);
+                if (match?.logo) eq.logoUrl = match.logo;
+            });
+            console.log('[MapStream] Roster:', equiposOrg.map(t => t.nombre), '| Replay:', r.equipos.map(e => e.nombre));
+            msAlCambiarTiempo(mapstream.tiempo, true);
+        }).catch(err => console.warn('[MapStream] No se pudo obtener roster:', err));
+    }
 }
 
 function msDemo() {
@@ -187,6 +201,7 @@ function msAlCambiarTiempo(t, forzar = false) {
     $$('#ms-fases button').forEach(b => b.classList.toggle('activo', fase && Number(b.dataset.fase) === fase.fase));
     msPintarEquipos(t);
     msPintarBajas(t);
+    msPintarEventos(t);
 }
 
 // ---------- Línea de tiempo ----------
@@ -208,17 +223,34 @@ function msPintarEquipos(t) {
     $('#ms-equipos').innerHTML = orden.map((e, i) => {
         const vivo = mapstream.equipoVivo(e, t);
         const oculto = mapstream.ocultos.has(e.id), foco = mapstream.foco.has(e.id), sigue = mapstream.seguir === e.id;
+        // Jugadores con kills individuales y arma top
+        const jugHtml = e.jugadores.map(j => {
+            const vj = mapstream.vivo(e, j, t);
+            const kills = mapstream.killsJugador(j, t);
+            const arma = j.armaTop ? `<small class="ms-jug-arma" title="Arma más usada">${esc(j.armaTop)}</small>` : '';
+            return `<div class="ms-jugador ${vj ? '' : 'muerto'}">
+                <i class="ms-jug-dot ${j.pos.length ? '' : 'sinpos'}" title="${esc(j.nombre)}${j.pos.length ? '' : ' · sin posición'}"></i>
+                <span class="ms-jug-nombre">${esc(j.nombre)}</span>
+                ${kills > 0 ? `<span class="ms-jug-kills">×${kills}</span>` : ''}
+                ${arma}
+            </div>`;
+        }).join('');
+        const logoEl = e.logoUrl
+            ? `<img src="${esc(e.logoUrl)}" class="ms-eq-logo" alt="${esc(e.nombre)}">`
+            : `<span class="ms-eq-n">${i + 1}</span>`;
         return `
         <div class="ms-eq ${vivo ? '' : 'fuera'} ${foco ? 'foco' : ''}" style="--c:${e.color}">
-            <span class="ms-eq-n">${i + 1}</span>
-            <label class="ms-eq-info">
-                <input type="checkbox" ${oculto ? '' : 'checked'} onchange="msMostrarEquipo('${e.id}', this.checked)" aria-label="Mostrar ${esc(e.nombre)}">
-                <span><strong>${esc(e.nombre)}</strong>
-                <small>${bajas[e.id]} bajas${!vivo && e.eliminadoEn != null ? ` · fuera ${relojMs(e.eliminadoEn)}` : ''}${e.jugadores.every(j => !j.pos.length) ? ' · sin posición' : ''}</small></span>
-            </label>
-            <span class="ms-vidas">${e.jugadores.map(j => `<i class="${mapstream.vivo(e, j, t) ? '' : 'muerto'} ${j.pos.length ? '' : 'sinpos'}" title="${esc(j.nombre)}${j.pos.length ? '' : ' · sin posición en el replay'}"></i>`).join('')}</span>
-            <button type="button" class="ms-btn ${foco ? 'activo' : ''}" title="${foco ? 'Quitar foco' : 'Resaltar equipo'}" onclick="msFoco('${e.id}')"><i class="fa-solid fa-star"></i></button>
-            <button type="button" class="ms-btn ${sigue ? 'activo' : ''}" title="${sigue ? 'Dejar de seguir' : 'Seguir con la cámara'}" onclick="msSeguir('${e.id}')"><i class="fa-solid fa-video"></i></button>
+            <div class="ms-eq-cabeza">
+                ${logoEl}
+                <label class="ms-eq-info">
+                    <input type="checkbox" ${oculto ? '' : 'checked'} onchange="msMostrarEquipo('${e.id}', this.checked)" aria-label="Mostrar ${esc(e.nombre)}">
+                    <span><strong>${esc(e.nombre)}</strong>
+                    <small>${bajas[e.id]} bajas${!vivo && e.eliminadoEn != null ? ` · fuera ${relojMs(e.eliminadoEn)}` : ''}${e.jugadores.every(j => !j.pos.length) ? ' · sin pos.' : ''}</small></span>
+                </label>
+                <button type="button" class="ms-btn ${foco ? 'activo' : ''}" title="${foco ? 'Quitar foco' : 'Resaltar equipo'}" onclick="msFoco('${e.id}')"><i class="fa-solid fa-star"></i></button>
+                <button type="button" class="ms-btn ${sigue ? 'activo' : ''}" title="${sigue ? 'Dejar de seguir' : 'Seguir con la cámara'}" onclick="msSeguir('${e.id}')"><i class="fa-solid fa-video"></i></button>
+            </div>
+            <div class="ms-jugadores">${jugHtml}</div>
         </div>`;
     }).join('');
 }
@@ -247,6 +279,29 @@ function msSeguir(id) {
     msAlCambiarTiempo(mapstream.tiempo, true);
 }
 
+// ---------- Panel de eventos (rescates, gloos) ----------
+function msPintarEventos(t) {
+    const r = mapstream?.replay;
+    const el = $('#ms-eventos');
+    if (!el || !r) return;
+    const resc = (r.rescates || []).filter(x => x.t <= t).length;
+    const gloo = (r.gloos || []).filter(x => x.t <= t).length;
+    if (!resc && !gloo) { el.hidden = true; return; }
+    el.hidden = false;
+    // Top rescatadores
+    const rescTop = new Map();
+    (r.rescates || []).filter(x => x.t <= t).forEach(x => {
+        const eq = r.equipos.find(e => e.jugadores.some(j => j.id === x.revividor));
+        const nombre = eq?.jugadores.find(j => j.id === x.revividor)?.nombre || '?';
+        rescTop.set(nombre, (rescTop.get(nombre) || 0) + 1);
+    });
+    const topResc = [...rescTop].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    el.innerHTML = `
+        <div class="ms-ev-row"><i class="fa-solid fa-heart-pulse" style="color:#00ff99"></i> Rescates: <strong>${resc}</strong>
+            ${topResc.length ? `<span class="ayuda"> · ${topResc.map(([n, v]) => `${esc(n)} ×${v}`).join(', ')}</span>` : ''}</div>
+        ${gloo ? `<div class="ms-ev-row"><i class="fa-solid fa-shield-halved" style="color:#00e5ff"></i> Muros gloo: <strong>${gloo}</strong></div>` : ''}`;
+}
+
 // ---------- Bajas ----------
 function msPintarBajas(t) {
     const r = mapstream.replay;
@@ -261,7 +316,19 @@ function msPintarBajas(t) {
 }
 
 // ---------- Capas ----------
-const MS_CAPAS = [['estelas', 'Estelas'], ['nombres', 'Nombres'], ['bajas', 'Bajas en el mapa'], ['zona', 'Zona'], ['fasesPrevias', 'Fases de zona ya cerradas'], ['avion', 'Avión']];
+const MS_CAPAS = [
+    ['estelas', 'Estelas'],
+    ['nombres', 'Nombres de equipo'],
+    ['etiquetas', 'Nombre + kills de cada jugador'],
+    ['bajas', 'Bajas en el mapa'],
+    ['acciones', 'Eventos (rescates, muros gloo)'],
+    ['caidas', 'Zonas de caída'],
+    ['rutaCompleta', 'Ruta completa del equipo en foco'],
+    ['zona', 'Zona'],
+    ['fasesPrevias', 'Fases de zona ya cerradas'],
+    ['avion', 'Avión'],
+    ['rotacion', 'Flechas de rotación']
+];
 
 function msPintarCapas() {
     $('#ms-capas').innerHTML = MS_CAPAS.map(([id, n]) =>
@@ -292,6 +359,136 @@ document.addEventListener('DOMContentLoaded', () => {
     ['dragleave', 'drop'].forEach(t => zona.addEventListener(t, ev => { ev.preventDefault(); zona.classList.remove('encima'); }));
     zona.addEventListener('drop', ev => msArchivos(ev.dataTransfer.files));
 });
+
+// ---------- Análisis: tabs, mapa de calor y estadísticas de zona ----------
+let msVistaActual = 'replay';
+
+function msVista(modo) {
+    msVistaActual = modo;
+    const modos = { replay: '#ms-modo-replay', 'calor-movimiento': '#ms-modo-calor', 'calor-peleas': '#ms-modo-calor', zona: '#ms-modo-zona', stats: '#ms-modo-stats' };
+    Object.values([...new Set(Object.values(modos))]).forEach(sel => { const el = $(sel); if (el) el.hidden = true; });
+    const activo = modos[modo];
+    if (activo) { const el = $(activo); if (el) el.hidden = false; }
+    $$('.ms-tab').forEach(b => b.classList.toggle('activo', b.dataset.vista === modo));
+    const blq = $('#ms-bloque-analisis');
+    if (blq) blq.hidden = modo === 'replay' || modo === 'stats';
+    const tit = $('#ms-analisis-titulo');
+    if (tit) tit.textContent = modo === 'calor-movimiento' ? '— Movimiento' : modo === 'calor-peleas' ? '— Peleas' : '';
+    if (modo === 'calor-movimiento') msCalorRenderizar('movimiento');
+    else if (modo === 'calor-peleas') msCalorRenderizar('peleas');
+    else if (modo === 'zona') msZonaPintar();
+    else if (modo === 'stats') msEstadisticasPintar();
+    if (modo === 'replay' && mapstream) mapstream.medir();
+}
+
+function msCalorRenderizar(tipo) {
+    if (typeof MSCalor === 'undefined') return;
+    const cv = $('#ms-calor');
+    if (!cv || !mapstream || !mapstream.replay) return;
+    const rect = cv.parentElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(rect.width * dpr);
+    cv.height = Math.round(rect.height * dpr);
+    cv.style.width = rect.width + 'px';
+    cv.style.height = rect.height + 'px';
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const W = rect.width, H = rect.height;
+    const base = Math.min(W, H) / 1000 * 0.98;
+    const opciones = {};
+    const eqSel = $('#ms-calor-equipo')?.value;
+    if (eqSel) opciones.equipos = [Number(eqSel)];
+    const faseSel = $('#ms-calor-fase')?.value;
+    if (faseSel) opciones.fase = Number(faseSel);
+    MSCalor.dibujar(ctx, W, H, base, mapstream.fondo, mapstream.replay, tipo, opciones);
+}
+
+function msPintarFiltrosAnalisis() {
+    const r = mapstream?.replay;
+    if (!r) return;
+    const selEq = $('#ms-calor-equipo');
+    if (selEq) selEq.innerHTML = `<option value="">Todos</option>` + r.equipos.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+    const selFase = $('#ms-calor-fase');
+    if (selFase) {
+        const fases = (r.zonas || []).filter(z => !z.inicial);
+        selFase.innerHTML = `<option value="">Todas</option>` + fases.map((z, i) => `<option value="${i + 1}">Zona ${i + 1}</option>`).join('');
+    }
+}
+
+function msZonaPintar() {
+    if (typeof MSCalor === 'undefined') return;
+    const el = $('#ms-zona-stats');
+    if (!el || !mapstream?.replay) return;
+    const stats = MSCalor.analizarZona(mapstream.replay);
+    if (!stats.length) {
+        el.innerHTML = '<p class="ayuda">Esta partida no tiene datos de zona.</p>';
+        return;
+    }
+    const color = n => (mapstream.replay.equipos?.find(e => e.nombre === n) || {}).color || 'var(--secondary)';
+    el.innerHTML = stats.map(s => `
+        <div class="ms-zona-fase">
+            <div class="ms-zona-cabeza">
+                <strong>Zona ${s.fase}</strong>
+                <span class="ayuda">${relojMs(s.anunciadaEn)} → ${relojMs(s.finCierre)} · r=${s.radio}</span>
+            </div>
+            <div class="ms-zona-datos">
+                <span><strong>${s.kills}</strong> kills en zona</span>
+                <span><strong>${s.muertesZona}</strong> muertes de zona</span>
+            </div>
+            ${s.top.length ? `<div class="ayuda ms-zona-top">${s.top.map(([eq, k]) => `<span style="color:${color(eq)}">${esc(eq)} ×${k}</span>`).join(' · ')}</div>` : ''}
+        </div>`).join('');
+}
+
+// ---------- Estadísticas ----------
+function msEstadisticasPintar() {
+    const el = $('#ms-stats-cont');
+    if (!el || !mapstream?.replay) { if (el) el.innerHTML = '<p class="ayuda">Carga una partida para ver estadísticas.</p>'; return; }
+    const r = mapstream.replay;
+    const tTotal = r.bajas.length ? Math.max(...r.bajas.map(b => b.t)) : 0;
+
+    // Precalcular por jugador
+    const kills = new Map(), muertes = new Map(), rescates = new Map(), tMuerte = new Map();
+    r.bajas.forEach(b => {
+        if (b.idMatador) kills.set(b.idMatador, (kills.get(b.idMatador) || 0) + 1);
+        if (b.idVictima) {
+            muertes.set(b.idVictima, (muertes.get(b.idVictima) || 0) + 1);
+            tMuerte.set(b.idVictima, b.t);
+        }
+    });
+    (r.rescates || []).forEach(x => rescates.set(x.revividor, (rescates.get(x.revividor) || 0) + 1));
+
+    el.innerHTML = r.equipos.map(e => {
+        const eKills = e.jugadores.reduce((s, j) => s + (kills.get(j.id) || 0), 0);
+        const eMuertes = e.jugadores.filter(j => muertes.get(j.id)).length;
+        const rows = e.jugadores.map(j => {
+            const k = kills.get(j.id) || 0;
+            const murio = !!muertes.get(j.id);
+            const t = tMuerte.get(j.id);
+            const resc = rescates.get(j.id) || 0;
+            return `<tr class="${murio ? 'ms-st-muerto' : ''}">
+                <td><i class="ms-jug-dot" style="background:${e.color};box-shadow:0 0 5px ${e.color}66;width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0"></i> ${esc(j.nombre)}</td>
+                <td class="ms-st-num">${k > 0 ? `<b>${k}</b>` : '—'}</td>
+                <td class="ms-st-num">${resc > 0 ? resc : '—'}</td>
+                <td class="ms-st-arma">${j.armaTop ? esc(j.armaTop) : '—'}</td>
+                <td class="ms-st-t">${t != null ? relojMs(t) : murio ? '?' : '<span class="ms-st-vivo">vivo</span>'}</td>
+            </tr>`;
+        }).join('');
+        return `<div class="ms-st-equipo">
+            <div class="ms-st-eq-cab" style="border-left:3px solid ${e.color}">
+                <strong>${esc(e.nombre)}</strong>
+                <span class="ms-st-eq-resumen">
+                    <span title="Kills totales"><i class="fa-solid fa-skull"></i> ${eKills}</span>
+                    <span title="Jugadores eliminados" class="${eMuertes === e.jugadores.length ? 'ms-st-elim' : ''}">${eMuertes}/${e.jugadores.length} elim.</span>
+                </span>
+            </div>
+            <table class="ms-st-tabla">
+                <thead><tr><th>Jugador</th><th>Kills</th><th>Rescates</th><th>Arma</th><th>Eliminado</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+    }).join('');
+}
 
 // Atajos: espacio reproduce/pausa · ← → mueven 5 s · F sigue al equipo en foco
 document.addEventListener('keydown', ev => {
