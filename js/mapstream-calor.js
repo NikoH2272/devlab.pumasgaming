@@ -142,7 +142,7 @@ const MSCalor = (() => {
         const L = 1000 * k;
 
         if (fondo) {
-            ctx.globalAlpha = 0.30;
+            ctx.globalAlpha = 0.65;
             ctx.drawImage(fondo, OX, OY, L, L);
             ctx.globalAlpha = 1;
         } else {

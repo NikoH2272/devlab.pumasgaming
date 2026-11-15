@@ -101,8 +101,8 @@ const FFReplay = (() => {
             const i = p - 4;
             const t = dv.getFloat32(i, true);
             if (!(t > 0 && t < 3000)) continue;
-            // Cabecera: [secuencia] y uno o dos campos antes de la cantidad
-            for (const salto of [1, 2]) {
+            // Cabecera: 0, 1 o 2 campos opcionales antes de la cantidad de jugadores
+            for (const salto of [0, 1, 2]) {
                 try {
                     let k = i + 7, v;
                     [v, k] = varint(b, k);
@@ -115,7 +115,7 @@ const FFReplay = (() => {
                         const f = [];
                         for (let c = 0; c < 19; c++) { [v, k] = varint(b, k); f.push(v); }
                         const y = zz(f[2]) / 1000;
-                        if (f[0] < 1 || f[0] > 64 || y < -100 || y > 2000 || f[17] !== 0 || f[18] !== 0
+                        if (f[0] < 1 || f[0] > 64 || y < -100 || y > 2000
                             || Math.abs(zz(f[1])) > 4e6 || Math.abs(zz(f[3])) > 4e6) throw new RangeError('registro inválido');
                         regs.push(f);
                     }
@@ -260,7 +260,7 @@ const FFReplay = (() => {
         for (let a = 0; a < lista.length; a++) {
             if (lista[a].n !== 1) continue;
             const racha = [lista[a]];
-            for (let c = a + 1; c < lista.length && lista[c].pos - racha[racha.length - 1].pos < 120; c++) {
+            for (let c = a + 1; c < lista.length && lista[c].pos - racha[racha.length - 1].pos < 200; c++) {
                 if (lista[c].n === racha.length + 1) racha.push(lista[c]);
             }
             if (racha.length > mejor.length) mejor = racha;
@@ -313,29 +313,36 @@ const FFReplay = (() => {
             ids.add(h.PlayerID);
             [...(h.KillEvents || []), ...(h.DeadEvents || [])].forEach(k => ids.add(k.PlayerID));
         });
-        // Si al .json le falta algún jugador (sin eventos), se completa con las
-        // fichas del .bin, solo de equipos que ya existen y hasta PlayerCount
         const fichas = fichasJugadores(b, null);
-        const equiposJson = new Set([...ids].map(p => p >>> 24));
-        if (info.PlayerCount && ids.size < info.PlayerCount) {
+
+        // Fuente principal: instantáneas 00 06 (todos los jugadores, entidad = byte bajo del PlayerID).
+        // Respaldo: 00 db (solo jugadores cercanos, entidad = orden del PlayerID).
+        // Se corre ANTES del suplemento para poder validar entidades reales.
+        let { porEntidad, buenos } = instantaneas(b, dv);
+        let fuente = '00 06';
+        if (!buenos) {
+            ({ porEntidad, buenos } = posiciones(b, dv));
+            fuente = '00 db';
+        }
+        if (!buenos) throw new Error('El .bin no tiene posiciones reconocibles.');
+
+        // Complementar ids con fichas del .bin:
+        // · Con 00 06: cualquier jugador con ficha cuyo byte-entidad (pid & 0xff) exista en
+        //   los datos de posición. Captura supervivientes sin kills/muertes ausentes del .json.
+        // · Con 00 db: respaldo por equipos conocidos + PlayerCount (como antes).
+        if (fuente === '00 06') {
+            [...fichas.keys()].filter(p => !ids.has(p) && porEntidad.has(p & 0xff))
+                .sort((a, c) => (a & 0xffffff) - (c & 0xffffff))
+                .forEach(p => ids.add(p));
+        } else if (info.PlayerCount && ids.size < info.PlayerCount) {
+            const equiposJson = new Set([...ids].map(p => p >>> 24));
             [...fichas.keys()].filter(p => !ids.has(p) && equiposJson.has(p >>> 24))
                 .sort((a, c) => (a & 0xffffff) - (c & 0xffffff))
                 .slice(0, info.PlayerCount - ids.size).forEach(p => ids.add(p));
         }
 
         const orden = [...ids].filter(p => (p & 0xffffff) > 0).sort((a, c) => (a & 0xffffff) - (c & 0xffffff));
-
-        // Fuente principal: instantáneas 00 06 (todos los jugadores, entidad = byte bajo del PlayerID).
-        // Respaldo: 00 db (solo jugadores cercanos, entidad = orden del PlayerID).
-        let { porEntidad, buenos } = instantaneas(b, dv);
-        let entidadDe = new Map(orden.map(pid => [pid, pid & 0xff]));
-        let fuente = '00 06';
-        if (!buenos) {
-            ({ porEntidad, buenos } = posiciones(b, dv));
-            entidadDe = new Map(orden.map((pid, n) => [pid, n + 1]));
-            fuente = '00 db';
-        }
-        if (!buenos) throw new Error('El .bin no tiene posiciones reconocibles.');
+        const entidadDe = new Map(orden.map(pid => [pid, pid & 0xff]));
 
         // Nombres: ficha del .bin, si no, los de las bajas del .json
         const nombre = new Map(fichas);
@@ -369,7 +376,7 @@ const FFReplay = (() => {
         const equiposIdx = [...new Set(orden.map(p => p >>> 24))].sort((a, c) => a - c);
         // El equipo que nunca fue eliminado (el ganador) toma el nombre que sobra de la tabla
         const sinNombre = equiposIdx.filter(eq => !nombreEquipo.has(eq));
-        if (sinNombre.length === 1 && sinUsar.length === 1) nombreEquipo.set(sinNombre[0], sinUsar[0].nombre);
+        sinNombre.forEach((eq, i) => { if (sinUsar[i]) nombreEquipo.set(eq, sinUsar[i].nombre); });
         // Si no alcanzó la tabla: por las siglas de clan que usan sus jugadores
         const faltan = equiposIdx.filter(eq => !nombreEquipo.has(eq));
         if (faltan.length) {
@@ -572,21 +579,77 @@ const FFReplay = (() => {
             return null;
         }).filter(Boolean));
 
-        // Arma más usada por jugador (impactos 02 6a: f[0]=atacante PID, f[4]=arma zigzag)
-        // 600-628 son granadas/habilidades, ≥80000 son habilidades especiales → se omiten
-        const hitsArma = new Map();
+        // Impactos (02 6a): f[0]=atacante PID, f[1]=víctima PID, f[2]=zona(0=cuerpo,1=cabeza,2=piernas), f[3]=daño, f[4]=arma zigzag
+        // 600-628 = granadas/habilidades, ≥80000 = habilidades especiales → omitir
+        const hitsArma = new Map();          // pid → Map<armaId, hits>
+        const combateAtk = new Map();        // pid → { dano, hits, headshots, torsos, piernas, armas: Map }
+        const combateVic = new Map();        // pid → { danoRecibido, hitsRecibidos }
         msgCombate(0x02, 0x6a).forEach(m => {
-            const pid = m.f[0], aid = zz(m.f[4] || 0);
+            const pid  = m.f[0];
+            const vid  = m.f[1];
+            const zona = m.f[2];        // 0=torso/cuerpo, 1=cabeza, 2=piernas/brazos
+            const dano = m.f[3];        // daño directo (varint positivo, sin zigzag)
+            const aid  = zz(m.f[4] || 0);
             if (aid <= 0 || (aid >= 600 && aid <= 628) || aid >= 80000) return;
+
+            // hitsArma (compatibilidad con armaTop/armasUsadas)
             if (!hitsArma.has(pid)) hitsArma.set(pid, new Map());
             hitsArma.get(pid).set(aid, (hitsArma.get(pid).get(aid) || 0) + 1);
+
+            // Stats del atacante
+            if (!combateAtk.has(pid)) combateAtk.set(pid, { dano: 0, hits: 0, headshots: 0, torsos: 0, piernas: 0, armas: new Map() });
+            const ca = combateAtk.get(pid);
+            ca.hits++;
+            if (dano > 0 && dano < 300) ca.dano += dano;
+            if (zona === 1) ca.headshots++;
+            else if (zona === 0) ca.torsos++;
+            else if (zona === 2) ca.piernas++;
+            if (!ca.armas.has(aid)) ca.armas.set(aid, { hits: 0, dano: 0 });
+            const ar = ca.armas.get(aid);
+            ar.hits++;
+            if (dano > 0 && dano < 300) ar.dano += dano;
+
+            // Stats de la víctima
+            if (vid > 0) {
+                if (!combateVic.has(vid)) combateVic.set(vid, { danoRecibido: 0, hitsRecibidos: 0 });
+                const cv = combateVic.get(vid);
+                cv.hitsRecibidos++;
+                if (dano > 0 && dano < 300) cv.danoRecibido += dano;
+            }
         });
+
+        // Derribos (02 8c): candidato a evento de derribo; mismo encuadre que bajas (02 8b)
+        const derribos = msgCombate(0x02, 0x8c).map(m => {
+            const pos = posEn(m.f[1] || 0, m.t);
+            return { t: Math.round(m.t * 10) / 10, idMatador: m.f[0], idVictima: m.f[1], x: pos ? pos[1] : undefined, y: pos ? pos[2] : undefined };
+        }).filter(d => d.x != null);
+        const derribosHechos = new Map(), derribosRecibidos2 = new Map();
+        derribos.forEach(d => {
+            derribosHechos.set(d.idMatador, (derribosHechos.get(d.idMatador) || 0) + 1);
+            if (d.idVictima) derribosRecibidos2.set(d.idVictima, (derribosRecibidos2.get(d.idVictima) || 0) + 1);
+        });
+
         equipos.forEach(e => e.jugadores.forEach(j => {
             const h = hitsArma.get(j.id);
-            if (!h) return;
-            const top = [...h].sort((a, x) => x[1] - a[1]);
-            j.armaTop = top[0] ? (nombreArma(top[0][0]) || null) : null;
-            j.armasUsadas = top.slice(0, 3).map(([id, hits]) => ({ id, nombre: nombreArma(id) || `${id}`, hits }));
+            if (h) {
+                const top = [...h].sort((a, x) => x[1] - a[1]);
+                j.armaTop = top[0] ? (nombreArma(top[0][0]) || null) : null;
+                j.armasUsadas = top.slice(0, 3).map(([id, hits]) => ({ id, nombre: nombreArma(id) || `${id}`, hits }));
+            }
+            const ca = combateAtk.get(j.id);
+            if (ca) {
+                j.dano = ca.dano;
+                j.hitsHechos = ca.hits;
+                j.headshots = ca.headshots;
+                j.torsos = ca.torsos;
+                j.piernas = ca.piernas;
+                j.danoArma = [...ca.armas].map(([id, v]) => ({ id, nombre: nombreArma(id) || `${id}`, hits: v.hits, dano: v.dano }))
+                    .sort((a, x) => x.dano - a.dano);
+            }
+            const cv = combateVic.get(j.id);
+            if (cv) { j.danoRecibido = cv.danoRecibido; j.hitsRecibidos = cv.hitsRecibidos; }
+            if (derribosHechos.has(j.id)) j.derribosHechos = derribosHechos.get(j.id);
+            if (derribosRecibidos2.has(j.id)) j.derribosRecibidos = derribosRecibidos2.get(j.id);
         }));
 
         return {
@@ -596,7 +659,7 @@ const FFReplay = (() => {
             duracion: Math.ceil(info.GameTotalTime || 0),
             idPartida: idTexto || String(info.MatchID || ''),   // sin redondeo si llegó como texto
             equipos, bajas, otrasMuertes, impactos, zonas: zonasPlano, avion,
-            rescates, gloos, caidas,
+            rescates, gloos, caidas, derribos,
             origen: 'replay', fuentePosiciones: fuente, lado: cal.lado
         };
     }

@@ -1166,8 +1166,10 @@ body.cal-monedas-abierto { overflow: hidden; }
 .ms-tab.activo { color: #fff; background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.22); }
 
 /* Modos de contenido */
-#ms-modo-replay, #ms-modo-calor { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-#ms-modo-zona, #ms-modo-stats { flex: 1; overflow-y: auto; }
+#ms-modo-replay, #ms-modo-calor,
+#ms-modo-rutas, #ms-modo-individual { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+#ms-modo-zona, #ms-modo-stats,
+#ms-modo-escuadras, #ms-modo-armas { flex: 1; overflow-y: auto; }
 
 /* Zona: stats por fase */
 .ms-zona-cont { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -1334,6 +1336,32 @@ body.cal-monedas-abierto { overflow: hidden; }
 .ms-st-arma { color: rgba(255,255,255,0.6); font-size: 0.7rem; }
 .ms-st-t { color: rgba(255,255,255,0.45); font-size: 0.7rem; font-family: 'Orbitron', monospace; }
 .ms-st-vivo { color: #00ff99; font-family: 'Inter', sans-serif; font-size: 0.7rem; }
+
+/* ─── Tab Escuadras: kill matrix ─── */
+.ms-mx-wrap { overflow-x: auto; padding: 10px 12px; }
+.ms-mx-tabla { border-collapse: collapse; font-size: 0.72rem; white-space: nowrap; }
+.ms-mx-tabla th, .ms-mx-tabla td { padding: 5px 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center; }
+.ms-mx-tabla thead th { color: rgba(255,255,255,0.4); font-size: 0.65rem; text-transform: uppercase; background: rgba(255,255,255,0.03); }
+.ms-mx-eq { text-align: left !important; font-size: 0.72rem; min-width: 90px; }
+.ms-mx-kill { color: #fff; }
+.ms-mx-zero { color: rgba(255,255,255,0.18); }
+.ms-mx-self { color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); }
+.ms-mx-total { font-weight: 700; color: #fff; border-left: 2px solid rgba(255,255,255,0.12) !important; }
+.ms-top-killers { display: flex; flex-direction: column; gap: 4px; }
+.ms-top-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.75rem; }
+.ms-top-row:last-child { border-bottom: none; }
+.ms-st-dano { color: #f9c74f; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ms-st-rec  { color: rgba(255,100,100,0.85); font-variant-numeric: tabular-nums; }
+.ms-st-arma { color: rgba(255,255,255,0.6); font-size: 0.7rem; }
+
+/* ─── Tab Armas ─── */
+.ms-armas-lista { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.ms-arma-fila { display: grid; grid-template-columns: 100px 1fr auto; align-items: center; gap: 8px; font-size: 0.75rem; }
+.ms-arma-nombre { font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-arma-barra-wrap { background: rgba(255,255,255,0.06); border-radius: 3px; height: 8px; overflow: hidden; }
+.ms-arma-barra { height: 100%; border-radius: 3px; min-width: 2px; transition: width 0.3s; }
+.ms-arma-num { text-align: right; color: rgba(255,255,255,0.7); font-variant-numeric: tabular-nums; }
+.ms-arma-desglose { grid-column: 1 / -1; font-size: 0.65rem; color: rgba(255,255,255,0.45); display: flex; flex-wrap: wrap; gap: 6px; padding-left: 2px; }
 
 /* ============================================================
    ZONA DE CARGA (arrastrar archivos) — MapStream y Estadísticas

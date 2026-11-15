@@ -223,6 +223,8 @@ class MapStream {
         this.cv.style.width = r.width + 'px';
         this.cv.style.height = r.height + 'px';
         this.cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.cx.imageSmoothingEnabled = true;
+        this.cx.imageSmoothingQuality = 'high';
         this.W = r.width; this.H = r.height;
         this.base = Math.min(r.width, r.height) / MS_ANCHO * 0.98;
         this.dibujar();
@@ -270,8 +272,11 @@ class MapStream {
         const P = p => ({ x: OX + p.x * k, y: OY + p.y * k });
         const t = this.tiempo;
 
-        if (this.fondo) c.drawImage(this.fondo, OX, OY, L, L);
-        else { c.fillStyle = '#0c0d12'; c.fillRect(OX, OY, L, L); }
+        if (this.fondo) {
+            c.imageSmoothingEnabled = true;
+            c.imageSmoothingQuality = 'high';
+            c.drawImage(this.fondo, OX, OY, L, L);
+        } else { c.fillStyle = '#0c0d12'; c.fillRect(OX, OY, L, L); }
         c.strokeStyle = 'rgba(0, 240, 255, 0.35)'; c.lineWidth = 1; c.strokeRect(OX, OY, L, L);
 
         // Avión
@@ -302,8 +307,14 @@ class MapStream {
                 c.save();
                 c.beginPath(); c.rect(OX, OY, L, L); c.arc(p.x, p.y, z.r * k, 0, Math.PI * 2, true);
                 c.fillStyle = 'rgba(40, 70, 200, 0.28)'; c.fill('evenodd');
+                // Glow exterior
+                c.shadowColor = 'rgba(60, 120, 255, 0.55)'; c.shadowBlur = 14;
                 c.strokeStyle = 'rgba(80, 140, 255, 0.95)'; c.lineWidth = 2.5;
                 c.beginPath(); c.arc(p.x, p.y, z.r * k, 0, Math.PI * 2); c.stroke();
+                // Línea interior tenue
+                c.shadowBlur = 0;
+                c.strokeStyle = 'rgba(130, 180, 255, 0.35)'; c.lineWidth = 1;
+                c.beginPath(); c.arc(p.x, p.y, z.r * k - 4, 0, Math.PI * 2); c.stroke();
                 c.restore();
             }
             if (s) {
@@ -409,8 +420,8 @@ class MapStream {
             });
         }
 
-        // Jugadores
-        const R = Math.max(4.5, Math.min(9, k * 6));
+        // Jugadores — radio entre 5 y 10 px según escala
+        const R = Math.max(5, Math.min(10, k * 7));
         visibles.forEach(e => {
             const tenue = atenuar(e);
             const ps = [];
@@ -462,6 +473,40 @@ class MapStream {
                 this._etiqueta(c, e.nombre, cx, cy, e.color);
             }
         });
+
+        // HUD: fase y estado de zona
+        if (this.capas.zona && this.replay.zonas.length) {
+            const fase = this.faseActual(t);
+            if (fase) {
+                const esCerrando = t >= (fase.inicioCierre ?? fase.anunciadaEn) && t <= (fase.finCierre ?? fase.anunciadaEn);
+                const esEsperando = !esCerrando && t < (fase.inicioCierre ?? fase.anunciadaEn + 1);
+                let segs = 0, label = '';
+                if (esCerrando) { segs = Math.max(0, (fase.finCierre ?? fase.anunciadaEn) - t); label = 'ZONA CERRANDO'; }
+                else if (esEsperando) { segs = Math.max(0, (fase.inicioCierre ?? fase.anunciadaEn) - t); label = 'ESPERANDO'; }
+                else { label = 'ZONA CERRADA'; }
+                const faseTexto = `F${fase.fase}`;
+                const timerTexto = segs > 0 ? `  ${Math.ceil(segs)}s` : '';
+                const hx = OX + 10, hy = OY + L - 10;
+                c.save();
+                c.font = `700 11px ${MS_FUENTE}`; c.textBaseline = 'bottom'; c.textAlign = 'left';
+                // Fondo
+                const tw = c.measureText(faseTexto + '  ' + label + timerTexto).width + 20;
+                c.fillStyle = 'rgba(4,5,10,0.78)';
+                c.fillRect(hx - 6, hy - 20, tw, 22);
+                // Pastilla de fase
+                const col = esCerrando ? '#5090ff' : esEsperando ? '#00f0ff' : 'rgba(255,255,255,0.4)';
+                c.fillStyle = col;
+                c.fillRect(hx - 6, hy - 20, 3, 22);
+                c.fillStyle = col; c.fillText(faseTexto, hx + 2, hy - 1);
+                c.fillStyle = 'rgba(255,255,255,0.5)';
+                c.fillText('  ' + label, hx + 2 + c.measureText(faseTexto).width, hy - 1);
+                if (segs > 0) {
+                    c.fillStyle = esCerrando ? '#ff8080' : '#fff';
+                    c.fillText(timerTexto, hx + 2 + c.measureText(faseTexto + '  ' + label).width, hy - 1);
+                }
+                c.restore();
+            }
+        }
 
         // Acciones en el mapa: rescates (cruz verde) y muros gloo (cuadrado azul)
         if (this.capas.acciones) {
